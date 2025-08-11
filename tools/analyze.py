@@ -2,8 +2,9 @@
 
 import pandas as pd
 from utils.fbref_scraper import scrape_all_tables, scrape_player_profile
-from utils.llm_analysis import analyze_single_player_v2
+from utils.llm_analysis_single_player import analyze_single_player
 from utils.resolve_player_url import search_fbref_url_with_playwright
+from tools.grading import compute_grade, rationale_from_breakdown
 
 def _section_title(text_en: str, text_fr: str, language: str) -> str:
     return text_fr if (language or "").lower().startswith("fr") else text_en
@@ -104,6 +105,11 @@ def analyze_player(players: list, language: str = "English") -> str:
         for col in ["Per90", "Percentile"]:
             display_df[col] = _to_numeric_safely(display_df[col])
 
+        # ✅ NEW: Deterministic grade from the scouting table
+        role_hint = scout_key  # usually contains 'fw'/'mf'/'df'/'gk'
+        grade_bd = compute_grade(scout_df, role_hint=role_hint)
+        grade_md = rationale_from_breakdown(grade_bd, language=language)
+
         scout_title = _section_title(
             f"### 🧾 {full_name} — Scouting Report ({scout_key.replace('scout_summary_', '').upper()})",
             f"### 🧾 {full_name} — Rapport de scouting ({scout_key.replace('scout_summary_', '').upper()})",
@@ -141,11 +147,16 @@ def analyze_player(players: list, language: str = "English") -> str:
             )
             std_md = f"\n\n{std_title}\n\n" + std_df.to_markdown(index=False)
 
-        # Build LLM extra context (presentation + standard stats)
-        extra_context_md = presentation_md + (std_md or "")
+        # Build LLM extra context (presentation + standard stats + deterministic grade)
+        grade_section_title = _section_title("### 🎯 Deterministic Grade", "### 🎯 Note déterministe", language)
+        extra_context_md = (
+            presentation_md
+            + (f"\n\n{grade_section_title}\n\n{grade_md}\n")
+            + (std_md or "")
+        )
 
         # 3) LLM analysis with extra context
-        llm_text = analyze_single_player_v2(
+        llm_text = analyze_single_player(
             full_name,
             scout_df,
             language=language,
@@ -153,6 +164,10 @@ def analyze_player(players: list, language: str = "English") -> str:
         )
 
         return f"""{presentation_md}
+{grade_section_title}
+
+{grade_md}
+
 {scout_title}
 
 {scout_md}
