@@ -15,19 +15,35 @@ def _prefer_stats_standard_key(keys: list[str]) -> str | None:
     """
     if not keys:
         return None
-    # Sort by a manual preference
     priority = [
         "stats_standard_dom_lg",
-        "stats_standard_lg",       # some pages
-        "stats_standard",          # generic
-        "stats_standard_all",      # if present
+        "stats_standard_lg",
+        "stats_standard",
+        "stats_standard_all",
     ]
     for pref in priority:
         for k in keys:
             if k == pref:
                 return k
-    # fallback: the first one
-    return keys[0]
+    return keys[0]  # fallback
+
+# 🔧 NEW: safe numeric conversion helper (future-proof: no errors="ignore")
+def _to_numeric_safely(series: pd.Series) -> pd.Series:
+    """
+    Attempt to convert a column to numeric:
+    - strips %, commas, and whitespace
+    - converts to numeric where possible (NaN otherwise)
+    - preserves original values where conversion failed
+    """
+    cleaned = (
+        series.astype(str)
+        .str.replace("%", "", regex=False)
+        .str.replace(",", "", regex=False)
+        .str.strip()
+    )
+    numeric = pd.to_numeric(cleaned, errors="coerce")
+    # keep original where conversion failed
+    return numeric.where(numeric.notna(), series)
 
 def analyze_player(players: list, language: str = "English") -> str:
     """
@@ -71,7 +87,6 @@ def analyze_player(players: list, language: str = "English") -> str:
         # 2a) Scouting table (Last 365d vs position group)
         scout_key = next((k for k in tables.keys() if k.startswith("scout_summary")), None)
         if not scout_key:
-            # we keep presentation, but bail out if no scout table
             return f"{presentation_md}\n⚠️ Could not find a scouting table for {full_name}."
 
         print(f"📄 Using scouting table: {scout_key} for {full_name}")
@@ -84,12 +99,10 @@ def analyze_player(players: list, language: str = "English") -> str:
         scout_df.set_index("Metric", inplace=True)
 
         display_df = scout_df[["Per90", "Percentile"]].copy()
-        # optional numeric cleaning
+
+        # ✅ FUTURE-PROOF: safe numeric conversion (no deprecated errors="ignore")
         for col in ["Per90", "Percentile"]:
-            try:
-                display_df[col] = pd.to_numeric(display_df[col].astype(str).str.replace("%", ""), errors="ignore")
-            except Exception:
-                pass
+            display_df[col] = _to_numeric_safely(display_df[col])
 
         scout_title = _section_title(
             f"### 🧾 {full_name} — Scouting Report ({scout_key.replace('scout_summary_', '').upper()})",
@@ -101,7 +114,6 @@ def analyze_player(players: list, language: str = "English") -> str:
         # 2b) Standard Stats (season-by-season)
         standard_keys = [k for k in tables.keys() if k.startswith("stats_standard")]
         if not standard_keys:
-            # we keep presentation, but bail out if no scout table
             return f"{presentation_md}\n⚠️ Could not find a scouting table for {full_name}."
 
         print(f"📄 Using scouting table: {standard_keys} for {full_name}")
@@ -113,7 +125,10 @@ def analyze_player(players: list, language: str = "English") -> str:
 
             # Heuristic: if first row looks like headers (contains 'Season' or 'Age'), set it as header
             try:
-                if not std_df.empty and any(x.lower() in ("season", "age", "squad", "comp") for x in std_df.iloc[0].astype(str).str.lower()):
+                if not std_df.empty and any(
+                    x.lower() in ("season", "age", "squad", "comp")
+                    for x in std_df.iloc[0].astype(str).str.lower()
+                ):
                     std_df.columns = std_df.iloc[0]
                     std_df = std_df.iloc[1:].reset_index(drop=True)
             except Exception:
@@ -124,7 +139,6 @@ def analyze_player(players: list, language: str = "English") -> str:
                 "### 📚 Statistiques standards (saison par saison)",
                 language,
             )
-            # keep a reasonable number of rows to avoid overly long outputs
             std_md = f"\n\n{std_title}\n\n" + std_df.to_markdown(index=False)
 
         # Build LLM extra context (presentation + standard stats)

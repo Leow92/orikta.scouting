@@ -1,8 +1,7 @@
 # agents/router.py
 
-#from tools.analyze import analyze_player
 from tools.compare import compare_players
-from tools.analyze_pres_scout_standard import analyze_player
+from tools.analyze import analyze_player
 
 def route_command(tool_call: dict, language: str = "English"):
     command = tool_call["command"]
