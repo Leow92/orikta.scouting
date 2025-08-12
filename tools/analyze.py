@@ -1,4 +1,4 @@
-# tools/analyze_pres_scout_standard.py
+# tools/analyze.py
 
 import pandas as pd
 from utils.fbref_scraper import scrape_all_tables, scrape_player_profile
@@ -143,43 +143,31 @@ def analyze_player(players: list, language: str = "English") -> str:
         )
         scout_md = display_df.to_markdown()
 
+        grade_section_title = _section_title(
+            f"### 🧾 {full_name} — Grade",
+            f"### 🧾 {full_name} — Note",
+            language,
+        )
+
         # 2b) Standard Stats (season-by-season)
         standard_keys = [k for k in tables.keys() if k.startswith("stats_standard")]
         if not standard_keys:
-            return f"{presentation_md}\n⚠️ Could not find a scouting table for {full_name}."
-
-        print(f"📄 Using scouting table: {standard_keys} for {full_name}")
-
-        std_md = ""
-        if standard_keys:
+            # keep presentation; still allow LLM to run with scout_df only
+            std_md = _section_title("### 📚 Standard Stats (season-by-season)", "### 📚 Statistiques standards (saison par saison)", language) + "\n\n" + (
+                "insufficient data" if not (language or "").lower().startswith("fr") else "donnée indisponible"
+            )
+        else:
+            print(f"📄 Using standard table candidates: {standard_keys} for {full_name}")
             chosen = _prefer_stats_standard_key(standard_keys)
             std_df = tables[chosen].copy()
-
-            # Heuristic: if first row looks like headers (contains 'Season' or 'Age'), set it as header
-            try:
-                if not std_df.empty and any(
-                    x.lower() in ("season", "age", "squad", "comp")
-                    for x in std_df.iloc[0].astype(str).str.lower()
-                ):
-                    std_df.columns = std_df.iloc[0]
-                    std_df = std_df.iloc[1:].reset_index(drop=True)
-            except Exception:
-                pass
 
             std_title = _section_title(
                 "### 📚 Standard Stats (season-by-season)",
                 "### 📚 Statistiques standards (saison par saison)",
                 language,
             )
+            # 👉 send exactly as scraped
             std_md = f"\n\n{std_title}\n\n" + std_df.to_markdown(index=False)
-
-        # Build LLM extra context (presentation + standard stats + deterministic grade)
-        grade_section_title = _section_title("### 🎯 Deterministic Grade", "### 🎯 Note déterministe", language)
-        extra_context_md = (
-            presentation_md
-            + (f"\n\n{grade_section_title}\n\n{grade_md}\n")
-            + (std_md)
-        )
 
         #print(extra_context_md)
 
@@ -190,6 +178,8 @@ def analyze_player(players: list, language: str = "English") -> str:
             language=language,
             std_md=std_md
         )
+
+        print("✅ Report Generation Done.")
 
         return f"""{presentation_md}
 

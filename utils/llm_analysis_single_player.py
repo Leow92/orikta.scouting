@@ -65,9 +65,7 @@ def analyze_single_player(
   - {"🟡 Axes d'amélioration" if language.lower().startswith("fr") else "🟡 Points to Improve"} (concrete, metric-based improvements)
 
 ### 3) {"Analyse des Statistiques Standards (contexte par saison)" if language.lower().startswith("fr") else "Standard Stats Analysis (season context)"}
-- Compare the 365‑day snapshot with **last season** from the standard stats table.
-- Call out trends (↑/↓) in key metrics (usage, goal contribution, passing, defensive actions).
-- If last season cannot be determined, say {"« donnée indisponible »" if language.lower().startswith("fr") else "'insufficient data'"}.
+- Call out trends (↑/↓) in key metrics for the last 3 seasons (play time average, goal contribution, passing, defensive actions).
 
 ### 4) {"Astuce tactique" if language.lower().startswith("fr") else "Tactical Tip"}
 - For each system, list **best-fit roles** (2–3 max) based on the evidence:
