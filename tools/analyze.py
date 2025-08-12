@@ -101,13 +101,12 @@ def analyze_player(players: list, language: str = "English") -> str:
 
         presentation_md = f"""{pres_title}
 
-        **{full_name}**
-
+        {full_name}
         {attr_lines if attr_lines else ""}
-        {bio_lines if bio_lines else ""}
-
         ---
         """
+        
+        #{bio_lines if bio_lines else ""}
 
         # 2) Scrape all tables
         tables = scrape_all_tables(url)
@@ -189,7 +188,7 @@ def analyze_player(players: list, language: str = "English") -> str:
             full_name,
             scout_df,
             language=language,
-            extra_context_md=extra_context_md
+            std_md=std_md
         )
 
         return f"""{presentation_md}
@@ -198,7 +197,6 @@ def analyze_player(players: list, language: str = "English") -> str:
 {scout_md}
 
 {grade_section_title}
-
 {grade_md}
 
 ---

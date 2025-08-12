@@ -25,7 +25,8 @@ def analyze_single_player(
     player: str,
     scout_df,
     language: str = "English",
-    extra_context_md: str = ""
+    std_md: str = "",
+    **kwargs
 ) -> str:
     """
     LLM analysis for a single player.
@@ -36,6 +37,9 @@ def analyze_single_player(
         - Optional deterministic grade section (grade_md) if computed upstream
     """
     try:
+        if not std_md and "extra_context_md" in kwargs and kwargs["extra_context_md"]:
+            std_md = kwargs["extra_context_md"]
+
         table_md = scout_df.to_markdown()
 
         # Hard constraints to reduce hallucinations + enforce structure
@@ -67,17 +71,10 @@ def analyze_single_player(
 
 ### 4) {"Astuce tactique" if language.lower().startswith("fr") else "Tactical Tip"}
 - For each system, list **best-fit roles** (2–3 max) based on the evidence:
-  - **4‑3‑3**: e.g., LW / RW / CF or #6 / #8 / #10, etc.
-  - **4‑4‑2**: e.g., ST, SS, RM/LM, DM/CM
-  - **3‑5‑2**: e.g., ST, AM, WB, #6/#8
+  - **4‑3‑3**
+  - **4‑4‑2**
+  - **3‑5‑2**
 - Tie each suggested role to specific metrics/signals from the scouting or standard stats.
-
-### 5) {"Note (/100) et justification" if language.lower().startswith("fr") else "Rating (/100) & Justification"}
-- If a **deterministic grade** exists in the context, **reuse it** and briefly justify with top drivers.
-- Otherwise, provide a conservative rating anchored in the top/bottom percentiles, and justify succinctly.
-
-### 6) {"Recommandation finale" if language.lower().startswith("fr") else "Final Recommendation"}
-- One short paragraph recommending **fit, risks, and next-step scouting actions** (minutes threshold, leagues, roles to test).
 """
 
         prompt = f"""
@@ -95,7 +92,7 @@ Follow the constraints below and produce the requested sections exactly.
 {table_md}
 
 #### ADDITIONAL CONTEXT (Player Presentation, Deterministic Grade if any, Standard Stats)
-{extra_context_md}
+{std_md if std_md else ("'insufficient data'" if not language.lower().startswith("fr") else "« donnée indisponible »")}
 
 #### OUTPUT FORMAT (all headings and bullet labels in {language})
 {output_format}
