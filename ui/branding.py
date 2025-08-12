@@ -1,18 +1,8 @@
 # ui/branding.py
 import streamlit as st
-from config import APP_NAME, TAGLINE_EN, TAGLINE_FR, VERSION
-
-def set_page_config():
-    st.set_page_config(
-        page_title=f"{APP_NAME} — Scouting",
-        page_icon="🪨",  # Onix rock emoji
-        layout="wide"
-    )
+from config import VERSION
 
 def sidebar_brand(language: str = "English"):
-    st.sidebar.markdown(f"## 🪨 {APP_NAME}")
-    st.sidebar.caption(TAGLINE_FR if language.lower().startswith("fr") else TAGLINE_EN)
-    st.sidebar.divider()
     st.sidebar.caption(f"v{VERSION}")
 
 def footer_brand():

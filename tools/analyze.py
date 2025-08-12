@@ -2,7 +2,8 @@
 
 import pandas as pd
 from utils.fbref_scraper import scrape_all_tables, scrape_player_profile
-from utils.llm_analysis_single_player import analyze_single_player
+#from utils.llm_analysis_single_player import analyze_single_player
+from utils.llm_analysis_single_player_light import analyze_single_player
 from utils.resolve_player_url import search_fbref_url_with_playwright
 from tools.grading import compute_grade, rationale_from_breakdown
 
@@ -157,7 +158,7 @@ def analyze_player(players: list, language: str = "English") -> str:
                 "insufficient data" if not (language or "").lower().startswith("fr") else "donnée indisponible"
             )
         else:
-            print(f"📄 Using standard table candidates: {standard_keys} for {full_name}")
+            print(f"📄 Using standard table: {standard_keys} for {full_name}")
             chosen = _prefer_stats_standard_key(standard_keys)
             std_df = tables[chosen].copy()
 
@@ -172,11 +173,19 @@ def analyze_player(players: list, language: str = "English") -> str:
         #print(extra_context_md)
 
         # 3) LLM analysis with extra context
+        '''
         llm_text = analyze_single_player(
             full_name,
             scout_df,
             language=language,
             std_md=std_md
+        )
+        '''
+
+        llm_text_light = analyze_single_player(
+            full_name,
+            scout_df,
+            language=language
         )
 
         print("✅ Report Generation Done.")
@@ -191,7 +200,7 @@ def analyze_player(players: list, language: str = "English") -> str:
 
 ---
 
-{llm_text}
+{llm_text_light}
 """
 
     except Exception as e:

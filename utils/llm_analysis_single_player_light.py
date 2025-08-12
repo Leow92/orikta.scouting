@@ -24,8 +24,7 @@ def _lang_block(language: str) -> str:
 def analyze_single_player(
     player: str,
     scout_df,
-    language: str = "English",
-    std_md: str = ""
+    language: str = "English"
 ) -> str:
     """
     LLM analysis for a single player.
@@ -55,10 +54,7 @@ def analyze_single_player(
   - {"🔴 Faiblesses" if language.lower().startswith("fr") else "🔴 Weaknesses"} (lowest percentiles and any negative metrics)
   - {"🟡 Axes d'amélioration" if language.lower().startswith("fr") else "🟡 Points to Improve"} (concrete, metric-based improvements)
 
-### 2) {"Analyse des Statistiques Standards (contexte par saison)" if language.lower().startswith("fr") else "Standard Stats Analysis (season context)"}
-- Call out trends (↑/↓) in key metrics for the last 3 seasons (play time average, goal contribution, passing, defensive actions).
-
-### 3) {"Astuce tactique" if language.lower().startswith("fr") else "Tactical Tip"}
+### 2) {"Astuce tactique" if language.lower().startswith("fr") else "Tactical Tip"}
 - For each system, list **best-fit roles** (2–3 max) based on the evidence:
   - **4‑3‑3**
   - **4‑4‑2**
@@ -79,9 +75,6 @@ Follow the constraints below and produce the requested sections exactly.
 
 #### REQUIRED DATA — Scout Summary (per 90 + percentiles, last 365 days)
 {table_md}
-
-#### PAST SEASONS STATISTICS (Standard Stats)
-{std_md}
 
 #### OUTPUT FORMAT (all headings and bullet labels in {language})
 {output_format}
