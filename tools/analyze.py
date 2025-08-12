@@ -179,8 +179,10 @@ def analyze_player(players: list, language: str = "English") -> str:
         extra_context_md = (
             presentation_md
             + (f"\n\n{grade_section_title}\n\n{grade_md}\n")
-            + (std_md or "")
+            + (std_md)
         )
+
+        #print(extra_context_md)
 
         # 3) LLM analysis with extra context
         llm_text = analyze_single_player(
