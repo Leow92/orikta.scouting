@@ -68,6 +68,7 @@ def analyze_player(players: list, language: str = "English") -> str:
     print(f"✅ Using URL for {full_name}: {url}")
 
     try:
+        '''
         # 1) Player Presentation
         profile = scrape_player_profile(url)  # {"name": ..., "paragraphs": [...]}
         if profile.get("name"):
@@ -78,6 +79,32 @@ def analyze_player(players: list, language: str = "English") -> str:
 
         {full_name}  
         {pres_lines if pres_lines else "_(No bio details found)_"}
+
+        ---
+        """
+        '''
+
+        # 1) Player Presentation
+        profile = scrape_player_profile(url)  # {"name", "attributes", "paragraphs", "position_hint"}
+        if profile.get("name"):
+            full_name = profile["name"]  # prefer exact FBref h1
+
+        pres_title = _section_title("### 👤 Player Presentation", "### 👤 Présentation du joueur", language)
+
+        # bullet list of labeled attributes
+        attr_lines = "\n".join(
+            f"- **{a['label']}**: {a['value']}" for a in profile.get("attributes", [])
+        )
+
+        # free-form paragraphs under the attributes (if any)
+        bio_lines = "\n".join(f"- {line}" for line in profile.get("paragraphs", []))
+
+        presentation_md = f"""{pres_title}
+
+        **{full_name}**
+
+        {attr_lines if attr_lines else ""}
+        {bio_lines if bio_lines else ""}
 
         ---
         """
@@ -106,7 +133,7 @@ def analyze_player(players: list, language: str = "English") -> str:
             display_df[col] = _to_numeric_safely(display_df[col])
 
         # ✅ NEW: Deterministic grade from the scouting table
-        role_hint = scout_key  # usually contains 'fw'/'mf'/'df'/'gk'
+        role_hint = profile.get("position_hint") or scout_key  # prefer profile hint
         grade_bd = compute_grade(scout_df, role_hint=role_hint)
         grade_md = rationale_from_breakdown(grade_bd, language=language)
 
@@ -164,14 +191,13 @@ def analyze_player(players: list, language: str = "English") -> str:
         )
 
         return f"""{presentation_md}
+
+{scout_title}
+{scout_md}
+
 {grade_section_title}
 
 {grade_md}
-
-{scout_title}
-
-{scout_md}
-{std_md}
 
 ---
 

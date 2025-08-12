@@ -4,12 +4,20 @@ import streamlit as st
 from agents.router import route_command
 from utils.prompt_parser import parse_prompt
 
-st.set_page_config(page_title="Modular Football Agent", layout="wide")
+from ui.branding import set_page_config, sidebar_brand, footer_brand
 
-st.title("⚽ orikta.scouting")
+# must be called before other Streamlit calls
+set_page_config()
 
-# Sidebar: Language
-language = st.sidebar.selectbox("🌍 Choose Language", ["English", "French"])
+# language selector (you already have this; keep your logic)
+language = st.session_state.get("language", "English")
+
+# sidebar header
+sidebar_brand(language=language)
+
+# top header (optional)
+st.markdown("# 🪨 Onix")
+st.caption("Tactical scouting, powered by your local stack.")
 
 # Session State
 if "history" not in st.session_state:
@@ -80,3 +88,5 @@ if st.session_state.history:
     selected_response = st.session_state.history[st.session_state.selected_history_index]["response"]
     st.markdown("### 🧠 Result")
     st.markdown(selected_response, unsafe_allow_html=True)
+
+footer_brand()
