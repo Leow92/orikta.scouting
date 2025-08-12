@@ -3,6 +3,7 @@
 from __future__ import annotations
 import requests
 from datetime import datetime
+import json
 
 OLLAMA_API_URL = "http://localhost:11434/api/chat"
 
@@ -80,16 +81,56 @@ Follow the constraints below and produce the requested sections exactly.
 {output_format}
 """
 
-        payload = {
+        payload_0 = {
             "model": "gemma2:9b",  # gemma2:9b / gemma3
             "messages": [{"role": "user", "content": prompt}],
             "stream": False,
         }
 
+        payload = {
+            "model": "gemma3",
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": True,
+            "keep_alive": "30m",
+            "options": {
+                "temperature": 0.2,
+                "num_ctx": 2048,
+                "num_predict": 800,
+                "top_p": 0.9,
+                "top_k": 40,
+                "repeat_penalty": 1.1,
+                "seed": 1
+            }
+            }
+
+        '''
         res = requests.post(OLLAMA_API_URL, json=payload, timeout=300)
         res.raise_for_status()
         data = res.json()
         return "### 🧠 LLM Analysis\n\n" + data["message"]["content"]
+        '''
+
+        chunks = []
+
+        with requests.post(OLLAMA_API_URL, json=payload, timeout=300, stream=True) as r:
+            r.raise_for_status()
+            for line in r.iter_lines(decode_unicode=True):
+                if not line:
+                    continue
+                try:
+                    ev = json.loads(line)
+                except Exception:
+                    continue
+                # The model sends back tokens in "message" events
+                if "message" in ev and "content" in ev["message"]:
+                    chunks.append(ev["message"]["content"])
+                # If Ollama signals done
+                if ev.get("done"):
+                    break
+
+        full_content = "".join(chunks).strip()
+
+        return "### 🧠 LLM Analysis\n\n" + (full_content or "⚠️ LLM returned no content.")
 
     except Exception as e:
         return f"⚠️ LLM analysis failed: {e}"
