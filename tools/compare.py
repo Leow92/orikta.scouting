@@ -2,7 +2,7 @@
 
 import pandas as pd
 from utils.fbref_scraper import scrape_all_tables
-from utils.llm_analysis import analyze_comparison
+from utils.llm_analysis_comparison import analyze_comparison
 from utils.resolve_player_url import search_fbref_url_with_playwright
 
 def compare_players(players: list, language="English") -> str:

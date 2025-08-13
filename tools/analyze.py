@@ -2,7 +2,6 @@
 
 import pandas as pd
 from utils.fbref_scraper import scrape_all_tables, scrape_player_profile
-#from utils.llm_analysis_single_player import analyze_single_player
 from utils.llm_analysis_single_player_light import analyze_single_player
 from utils.resolve_player_url import search_fbref_url_with_playwright
 from tools.grading import compute_grade, rationale_from_breakdown
