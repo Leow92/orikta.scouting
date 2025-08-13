@@ -1,4 +1,4 @@
-# utils/llm_analysis.py
+# utils/llm_analysis_single_player_light.py
 
 from __future__ import annotations
 import requests, json

@@ -1,9 +1,8 @@
-# app_v4.py
+# app.py
 
 import streamlit as st
 from agents.router import route_command
 from utils.prompt_parser import parse_prompt
-
 from ui.branding import sidebar_brand, footer_brand
 
 # --- Language selector (sidebar) ---
@@ -152,6 +151,5 @@ if st.session_state.history:
         mime="text/html",
         use_container_width=True,
     )
-
 
 footer_brand()
