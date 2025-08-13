@@ -47,6 +47,70 @@ def _to_numeric_safely(series: pd.Series) -> pd.Series:
     # keep original where conversion failed
     return numeric.where(numeric.notna(), series)
 
+def _parse_label_value_lines(paragraphs: list[str]) -> list[dict]:
+    """
+    Best-effort: turn 'Label: Value' paragraphs into {'label','value'} pairs.
+    Leaves other paragraphs out (or you can collect them separately).
+    """
+    items = []
+    for p in paragraphs or []:
+        if ":" in p:
+            label, value = p.split(":", 1)
+            label = label.strip()
+            value = value.strip().strip(".")
+            if label and value:
+                items.append({"label": label, "value": value})
+    return items
+
+def _merge_profile_items(profile: dict) -> list[dict]:
+    """
+    Merge 'attributes' + parsed paragraphs, de-dup by label (keep first non-empty).
+    """
+    seen = set()
+    merged = []
+    # attributes from <p><strong>Label</strong> Value</p>
+    for a in profile.get("attributes", []):
+        label = str(a.get("label", "")).strip()
+        value = str(a.get("value", "")).strip()
+        if label and value and label.lower() not in seen:
+            merged.append({"label": label, "value": value})
+            seen.add(label.lower())
+    # paragraphs that look like Label: Value
+    for a in _parse_label_value_lines(profile.get("paragraphs", [])):
+        label = a["label"]
+        if label.lower() not in seen and a["value"]:
+            merged.append(a)
+            seen.add(label.lower())
+    return merged
+
+def _profile_table_md(full_name: str, items: list[dict], language: str) -> str:
+    """
+    Render name + two-column table (Field | Value) as markdown.
+    """
+    title = f"### 👤 {full_name} Presentation" if not (language or "").lower().startswith("fr") else f"### 👤 Présentation de {full_name}"
+    if not items:
+        no_data = "_(No bio details found)_" if not (language or "").lower().startswith("fr") else "_(Aucune information trouvée)_"
+        return f"""{title}
+
+**{full_name}**
+
+{no_data}
+
+---
+"""
+    # Markdown table
+    rows = "\n".join(f"| **{it['label']}** | {it['value']} |" for it in items)
+    return f"""{title}
+
+**{full_name}**
+
+| Field | Value |
+|---|---|
+{rows}
+
+---
+"""
+
 def analyze_player(players: list, language: str = "English") -> str:
     """
     Analyze a single player's scouting report using FBref tables + LLM summary.
@@ -83,7 +147,7 @@ def analyze_player(players: list, language: str = "English") -> str:
 
         ---
         """
-        '''
+        
 
         # 1) Player Presentation
         profile = scrape_player_profile(url)  # {"name", "attributes", "paragraphs", "position_hint"}
@@ -106,6 +170,13 @@ def analyze_player(players: list, language: str = "English") -> str:
         {attr_lines if attr_lines else ""}
         ---
         """
+        '''
+        profile = scrape_player_profile(url)  # {"name","attributes","paragraphs","position_hint"}
+        if profile.get("name"):
+            full_name = profile["name"]
+
+        items = _merge_profile_items(profile)
+        presentation_md = _profile_table_md(full_name, items, language)
         
         #{bio_lines if bio_lines else ""}
 
@@ -138,15 +209,15 @@ def analyze_player(players: list, language: str = "English") -> str:
         grade_md = rationale_from_breakdown(grade_bd, language=language)
 
         scout_title = _section_title(
-            f"### 🧾 {full_name} — Scouting Report ({scout_key.replace('scout_summary_', '').upper()})",
-            f"### 🧾 {full_name} — Rapport de scouting ({scout_key.replace('scout_summary_', '').upper()})",
+            f"### 🧾 Scouting Report ({scout_key.replace('scout_summary_', '').upper()})",
+            f"### 🧾 Rapport de scouting ({scout_key.replace('scout_summary_', '').upper()})",
             language,
         )
         scout_md = display_df.to_markdown()
 
         grade_section_title = _section_title(
-            f"### 🧾 {full_name} — Grade",
-            f"### 🧾 {full_name} — Note",
+            f"### 🧾 Grade/100",
+            f"### 🧾 Note/100",
             language,
         )
 
@@ -180,8 +251,9 @@ def analyze_player(players: list, language: str = "English") -> str:
             language=language,
             std_md=std_md
         )
+        
         '''
-
+        
         llm_text_light = analyze_single_player(
             full_name,
             scout_df,
