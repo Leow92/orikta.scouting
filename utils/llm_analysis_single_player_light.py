@@ -117,8 +117,7 @@ You are a **tactical football analyst and data scout** with deep expertise in ad
         payload = {
             "model": "gemma3",
             "messages": [{"role": "user", "content": prompt}],
-            "stream": True,
-            "keep_alive": "30m"
+            "stream": False
         }
 
         # Stream response
@@ -142,3 +141,4 @@ You are a **tactical football analyst and data scout** with deep expertise in ad
 
     except Exception as e:
         return f"⚠️ LLM analysis failed: {e}"
+

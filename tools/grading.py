@@ -190,7 +190,7 @@ def rationale_from_breakdown(bd: GradeBreakdown, language: str = "English") -> s
     """
     # Top positive drivers
     top = sorted(bd.matched, key=lambda x: x[2], reverse=True)[:3]
-    drivers = ", ".join([f"{m},weight={w:.2f})" for m, w, _ in top]) if top else "—"
+    drivers = ", ".join([f"{m}, weight={w:.2f}" for m, w, _ in top]) if top else "—"
 
     # Missing signals
     missing = ", ".join(bd.missing[:5]) if bd.missing else "—"
@@ -198,16 +198,16 @@ def rationale_from_breakdown(bd: GradeBreakdown, language: str = "English") -> s
     if (language or "").lower().startswith("fr"):
         return (
             f"Note déterministe: **{bd.final_score:.1f}/100** (rôle: {bd.role.upper()}).\n\n"
-            f"Principaux moteurs: {drivers}.\n"
-            f"Principaux points d'amélioration, faiblesses: {missing}.\n"
+            f"Principaux moteurs: {drivers}.\n\n"
+            f"Principaux points d'amélioration, faiblesses: {missing}.\n\n"
             f"La note est calculée sur des percentiles FBref (365 jours) pondérés par le poste, "
             f"avec inversion des métriques défavorables (ex: pertes de balle, fautes)."
         )
     else:
         return (
             f"Deterministic grade: **{bd.final_score:.1f}/100** (role: {bd.role.upper()}).\n\n"
-            f"Top drivers: {drivers}.\n"
-            f"Principals improvements points, weaknesses: {missing}.\n"
+            f"Top drivers: {drivers}.\n\n"
+            f"Principals improvements points, weaknesses: {missing}.\n\n"
             f"The grade uses FBref 365‑day percentiles, weighted by position, "
             f"inverting negative metrics (e.g., fouls, dispossessed)."
         )
