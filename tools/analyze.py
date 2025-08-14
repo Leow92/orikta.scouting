@@ -16,6 +16,8 @@ def _md(s: str) -> str:
     """Dedent and strip a multi-line Markdown string."""
     return textwrap.dedent(s).strip()
 
+SEPARATOR = "\n\n---\n\n"
+
 def _section_title(text_en: str, text_fr: str, language: str) -> str:
     return text_fr if (language or "").lower().startswith("fr") else text_en
 
@@ -92,8 +94,6 @@ def _merge_profile_items(profile: dict) -> list[dict]:
             seen.add(label.lower())
     return merged
 
-# tools/analyze.py (replace _profile_table_md)
-
 def _profile_table_md(full_name: str, items: list[dict], language: str) -> str:
     title = (
         f"### 👤 {full_name} Presentation"
@@ -112,8 +112,6 @@ def _profile_table_md(full_name: str, items: list[dict], language: str) -> str:
 **{full_name}**
 
 {no_data}
-
----
 """.strip()
 
     # ensure each key/value is its own row
@@ -126,8 +124,6 @@ def _profile_table_md(full_name: str, items: list[dict], language: str) -> str:
 | Field | Value |
 |---|---|
 {rows}
-
----
 """.strip()
 
 def analyze_player(players: list, language: str = "English") -> str:
@@ -178,8 +174,21 @@ def analyze_player(players: list, language: str = "English") -> str:
         scout_df.columns = ["Metric", "Per90", "Percentile"][:len(scout_df.columns)]
         scout_df.set_index("Metric", inplace=True)
         display_df = scout_df[["Per90", "Percentile"]].copy()
+
+        # convert safely, as you already do
         for col in ["Per90", "Percentile"]:
             display_df[col] = _to_numeric_safely(display_df[col])
+
+        # NEW: remove empty metric rows and rows that are all NaN/empty
+        def _row_is_empty(s) -> bool:
+            return (str(s.name).strip() == "" or s.isna().all() or (s.astype(str).str.strip() == "").all())
+
+        mask = display_df.apply(_row_is_empty, axis=1)
+        if mask.any():
+            display_df = display_df[~mask]
+
+        # render as pipe table
+        scout_md = display_df.to_markdown(tablefmt="pipe", index=True)
 
         # 2b) Deterministic grade (single best-guess role)
         role_hint = profile.get("position_hint") or scout_key
@@ -211,7 +220,6 @@ def analyze_player(players: list, language: str = "English") -> str:
             f"### 🧾 Rapport de scouting ({scout_key.replace('scout_summary_', '').upper()})",
             language,
         )
-        scout_md = display_df.to_markdown(tablefmt="pipe", index=True)
 
         #grade_section_title = _section_title("### 🧾 Grade/100", "### 🧾 Note/100", language)
 
@@ -240,14 +248,12 @@ def analyze_player(players: list, language: str = "English") -> str:
 
         return _md(f"""
 {presentation_md}
-
+{SEPARATOR}
 {scout_title}
 {scout_md}
-
+{SEPARATOR}
 {multi_md}
-
----
-
+{SEPARATOR}
 {llm_text_light}
 """)
 
