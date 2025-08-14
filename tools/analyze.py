@@ -2,12 +2,19 @@
 
 import pandas as pd
 from utils.fbref_scraper import scrape_all_tables, scrape_player_profile
-from utils.llm_analysis_single_player_light import analyze_single_player
+from utils.llm_analysis_single_player import analyze_single_player
 from utils.resolve_player_url import search_fbref_url_with_playwright
 from tools.grading_v2 import (
     compute_grade, rationale_from_breakdown,
     normalize_positions_from_profile, compute_grade_for_positions, label_from_pair
 )
+
+# tools/analyze.py
+import textwrap
+
+def _md(s: str) -> str:
+    """Dedent and strip a multi-line Markdown string."""
+    return textwrap.dedent(s).strip()
 
 def _section_title(text_en: str, text_fr: str, language: str) -> str:
     return text_fr if (language or "").lower().startswith("fr") else text_en
@@ -85,31 +92,44 @@ def _merge_profile_items(profile: dict) -> list[dict]:
             seen.add(label.lower())
     return merged
 
+# tools/analyze.py (replace _profile_table_md)
+
 def _profile_table_md(full_name: str, items: list[dict], language: str) -> str:
-    """
-    Render name + two-column table (Field | Value) as markdown.
-    """
-    title = f"### 👤 {full_name} Presentation" if not (language or "").lower().startswith("fr") else f"### 👤 Présentation de {full_name}"
+    title = (
+        f"### 👤 {full_name} Presentation"
+        if not (language or "").lower().startswith("fr")
+        else f"### 👤 Présentation de {full_name}"
+    )
+
     if not items:
-        no_data = "_(No bio details found)_" if not (language or "").lower().startswith("fr") else "_(Aucune information trouvée)_"
+        no_data = (
+            "_(No bio details found)_"
+            if not (language or "").lower().startswith("fr")
+            else "_(Aucune information trouvée)_"
+        )
         return f"""{title}
 
-        {no_data}
+**{full_name}**
 
-        ---
-        """
-    # Markdown table
+{no_data}
+
+---
+""".strip()
+
+    # ensure each key/value is its own row
     rows = "\n".join(f"| **{it['label']}** | {it['value']} |" for it in items)
+
     return f"""{title}
 
-    **{full_name}**
+**{full_name}**
 
-    | Field | Value |
-    |---|---|
-    {rows}
+| Field | Value |
+|---|---|
+{rows}
 
-    ---
-    """
+---
+""".strip()
+
 
 def analyze_player(players: list, language: str = "English") -> str:
     if not isinstance(players, list) or len(players) != 1:
@@ -192,8 +212,9 @@ def analyze_player(players: list, language: str = "English") -> str:
             f"### 🧾 Rapport de scouting ({scout_key.replace('scout_summary_', '').upper()})",
             language,
         )
-        scout_md = display_df.to_markdown()
-        grade_section_title = _section_title("### 🧾 Grade/100", "### 🧾 Note/100", language)
+        scout_md = display_df.to_markdown(tablefmt="pipe", index=True)
+
+        #grade_section_title = _section_title("### 🧾 Grade/100", "### 🧾 Note/100", language)
 
         # 3) (Optional) pass a compact per‑position context to the LLM as well
         top_roles_for_llm = [
@@ -218,7 +239,8 @@ def analyze_player(players: list, language: str = "English") -> str:
 
         print("✅ Report Generation Done.")
 
-        return f"""{presentation_md}
+        return _md(f"""
+{presentation_md}
 
 {scout_title}
 {scout_md}
@@ -228,10 +250,7 @@ def analyze_player(players: list, language: str = "English") -> str:
 ---
 
 {llm_text_light}
-"""
-
-    except Exception as e:
-        return f"⚠️ Error analyzing {full_name}: {e}"
+""")
 
     except Exception as e:
         return f"⚠️ Error analyzing {full_name}: {e}"
