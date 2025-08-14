@@ -4,7 +4,10 @@ import pandas as pd
 from utils.fbref_scraper import scrape_all_tables, scrape_player_profile
 from utils.llm_analysis_single_player_light import analyze_single_player
 from utils.resolve_player_url import search_fbref_url_with_playwright
-from tools.grading import compute_grade, rationale_from_breakdown
+from tools.grading_v2 import (
+    compute_grade, rationale_from_breakdown,
+    normalize_positions_from_profile, compute_grade_for_positions, label_from_pair
+)
 
 def _section_title(text_en: str, text_fr: str, language: str) -> str:
     return text_fr if (language or "").lower().startswith("fr") else text_en
@@ -91,39 +94,30 @@ def _profile_table_md(full_name: str, items: list[dict], language: str) -> str:
         no_data = "_(No bio details found)_" if not (language or "").lower().startswith("fr") else "_(Aucune information trouvée)_"
         return f"""{title}
 
-**{full_name}**
+        {no_data}
 
-{no_data}
-
----
-"""
+        ---
+        """
     # Markdown table
     rows = "\n".join(f"| **{it['label']}** | {it['value']} |" for it in items)
     return f"""{title}
 
-**{full_name}**
+    **{full_name}**
 
-| Field | Value |
-|---|---|
-{rows}
+    | Field | Value |
+    |---|---|
+    {rows}
 
----
-"""
+    ---
+    """
 
 def analyze_player(players: list, language: str = "English") -> str:
-    """
-    Analyze a single player's scouting report using FBref tables + LLM summary.
-    - Player Presentation (name + <p> lines from #info.players.open)
-    - Scouting (Last 365d, vs position group) — 'scout_summary_*'
-    - Standard Stats (season-by-season) — first 'stats_standard*' table found
-    """
     if not isinstance(players, list) or len(players) != 1:
         return "⚠️ Please provide exactly one player to analyze."
 
     query_name = players[0]
     print(f"🧪 Analyze request for: {query_name}")
 
-    # Resolve URL via dynamic search
     url = search_fbref_url_with_playwright(query_name)
     if not url:
         return f"❌ Could not resolve FBref page for: {query_name}"
@@ -132,52 +126,21 @@ def analyze_player(players: list, language: str = "English") -> str:
     print(f"✅ Using URL for {full_name}: {url}")
 
     try:
-        '''
-        # 1) Player Presentation
-        profile = scrape_player_profile(url)  # {"name": ..., "paragraphs": [...]}
-        if profile.get("name"):
-            full_name = profile["name"]  # prefer exact FBref h1
-        pres_title = _section_title("### 👤 Player Presentation", "### 👤 Présentation du joueur", language)
-        pres_lines = "\n".join(f"- {line}" for line in profile.get("paragraphs", []))
-        presentation_md = f"""{pres_title}
-
-        {full_name}  
-        {pres_lines if pres_lines else "_(No bio details found)_"}
-
-        ---
-        """
-        
-
-        # 1) Player Presentation
-        profile = scrape_player_profile(url)  # {"name", "attributes", "paragraphs", "position_hint"}
-        if profile.get("name"):
-            full_name = profile["name"]  # prefer exact FBref h1
-
-        pres_title = _section_title("### 👤 Player Presentation", "### 👤 Présentation du joueur", language)
-
-        # bullet list of labeled attributes
-        attr_lines = "\n".join(
-            f"- **{a['label']}**: {a['value']}" for a in profile.get("attributes", [])
-        )
-
-        # free-form paragraphs under the attributes (if any)
-        bio_lines = "\n".join(f"- {line}" for line in profile.get("paragraphs", []))
-
-        presentation_md = f"""{pres_title}
-
-        {full_name}
-        {attr_lines if attr_lines else ""}
-        ---
-        """
-        '''
+        # 1) Player Presentation (and capture raw position text)
         profile = scrape_player_profile(url)  # {"name","attributes","paragraphs","position_hint"}
         if profile.get("name"):
             full_name = profile["name"]
 
+        # pull FBref "Position" field for multi‑position grading
+        pos_raw = None
+        for a in profile.get("attributes", []):
+            if str(a.get("label","")).lower().startswith("position"):
+                pos_raw = a.get("value")
+                break
+        positions = normalize_positions_from_profile(pos_raw)  # list of (base, sub|None)
+
         items = _merge_profile_items(profile)
         presentation_md = _profile_table_md(full_name, items, language)
-        
-        #{bio_lines if bio_lines else ""}
 
         # 2) Scrape all tables
         tables = scrape_all_tables(url)
@@ -192,71 +155,65 @@ def analyze_player(players: list, language: str = "English") -> str:
         if scout_df.shape[1] < 3:
             return f"{presentation_md}\n⚠️ Scouting table for {full_name} has an unexpected format."
 
-        # normalize
+        # normalize percentiles/per90
         scout_df.columns = ["Metric", "Per90", "Percentile"][:len(scout_df.columns)]
         scout_df.set_index("Metric", inplace=True)
-
         display_df = scout_df[["Per90", "Percentile"]].copy()
-
-        # ✅ FUTURE-PROOF: safe numeric conversion (no deprecated errors="ignore")
         for col in ["Per90", "Percentile"]:
             display_df[col] = _to_numeric_safely(display_df[col])
 
-        # ✅ NEW: Deterministic grade from the scouting table
-        role_hint = profile.get("position_hint") or scout_key  # prefer profile hint
+        # 2b) Deterministic grade (single best-guess role)
+        role_hint = profile.get("position_hint") or scout_key
         grade_bd = compute_grade(scout_df, role_hint=role_hint)
         grade_md = rationale_from_breakdown(grade_bd, language=language)
 
+        # 🔥 2c) Multi‑position grades (NOW that scout_df exists)
+        per_pos = compute_grade_for_positions(scout_df, positions)
+        # sort by score desc for the table
+        per_pos_sorted = dict(sorted(per_pos.items(), key=lambda kv: kv[1].final_score, reverse=True))
+
+        multi_title = _section_title("### 🧮 Multi‑position Grades /100", "### 🧮 Notes par poste /100", language)
+        rows = ["| Position | Score/100 | Top drivers | Missing |", "|---|---:|---|---|"]
+        for role_key, bd in per_pos_sorted.items():
+            top2 = sorted(bd.matched, key=lambda x: x[2], reverse=True)[:2]
+            top_str = ", ".join(f"{m} (w={w:.2f})" for m, w, _ in top2) if top2 else "—"
+            miss_str = ", ".join(bd.missing[:3]) if bd.missing else "—"
+            if ":" in role_key:
+                base, sub = role_key.split(":", 1)
+                pretty = label_from_pair(base, sub)
+            else:
+                pretty = label_from_pair(role_key, None)
+            rows.append(f"| {pretty} | **{bd.final_score:.1f}** | {top_str} | {miss_str} |")
+        multi_md = multi_title + "\n" + "\n".join(rows) + "\n"
+
+        # Titles/markdown
         scout_title = _section_title(
             f"### 🧾 Scouting Report ({scout_key.replace('scout_summary_', '').upper()})",
             f"### 🧾 Rapport de scouting ({scout_key.replace('scout_summary_', '').upper()})",
             language,
         )
         scout_md = display_df.to_markdown()
+        grade_section_title = _section_title("### 🧾 Grade/100", "### 🧾 Note/100", language)
 
-        grade_section_title = _section_title(
-            f"### 🧾 Grade/100",
-            f"### 🧾 Note/100",
-            language,
-        )
+        # 3) (Optional) pass a compact per‑position context to the LLM as well
+        top_roles_for_llm = [
+            (label_from_pair(*(rk.split(":") if ":" in rk else (rk, None))), round(bd.final_score, 1))
+            for rk, bd in list(per_pos_sorted.items())[:3]  # top-3 roles
+        ]
+        grade_ctx = {
+            "role": grade_bd.role,
+            "score": round(grade_bd.final_score, 1),
+            "drivers": sorted(grade_bd.matched, key=lambda x: x[2], reverse=True)[:5],
+            "missing": grade_bd.missing[:5],
+            "per_position_top": top_roles_for_llm,  # e.g., [("Winger", 84.2), ("ST/CF", 79.8), ...]
+        }
 
-        # 2b) Standard Stats (season-by-season)
-        standard_keys = [k for k in tables.keys() if k.startswith("stats_standard")]
-        if not standard_keys:
-            # keep presentation; still allow LLM to run with scout_df only
-            std_md = _section_title("### 📚 Standard Stats (season-by-season)", "### 📚 Statistiques standards (saison par saison)", language) + "\n\n" + (
-                "insufficient data" if not (language or "").lower().startswith("fr") else "donnée indisponible"
-            )
-        else:
-            print(f"📄 Using standard table: {standard_keys} for {full_name}")
-            chosen = _prefer_stats_standard_key(standard_keys)
-            std_df = tables[chosen].copy()
-
-            std_title = _section_title(
-                "### 📚 Standard Stats (season-by-season)",
-                "### 📚 Statistiques standards (saison par saison)",
-                language,
-            )
-            # 👉 send exactly as scraped
-            std_md = f"\n\n{std_title}\n\n" + std_df.to_markdown(index=False)
-
-        #print(extra_context_md)
-
-        # 3) LLM analysis with extra context
-        '''
-        llm_text = analyze_single_player(
-            full_name,
-            scout_df,
-            language=language,
-            std_md=std_md
-        )
-        
-        '''
-        
+        # 4) LLM analysis (light)
         llm_text_light = analyze_single_player(
             full_name,
             scout_df,
-            language=language
+            language=language,
+            grade_ctx=grade_ctx,   # passes best‑guess + top per‑position ranks
         )
 
         print("✅ Report Generation Done.")
@@ -266,13 +223,15 @@ def analyze_player(players: list, language: str = "English") -> str:
 {scout_title}
 {scout_md}
 
-{grade_section_title}
-{grade_md}
+{multi_md}
 
 ---
 
 {llm_text_light}
 """
+
+    except Exception as e:
+        return f"⚠️ Error analyzing {full_name}: {e}"
 
     except Exception as e:
         return f"⚠️ Error analyzing {full_name}: {e}"

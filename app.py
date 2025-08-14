@@ -3,7 +3,7 @@
 import streamlit as st
 from agents.router import route_command
 from utils.prompt_parser import parse_prompt
-from ui.branding import sidebar_brand, footer_brand
+from ui.branding import footer_brand
 
 # --- Language selector (sidebar) ---
 with st.sidebar:
@@ -23,9 +23,6 @@ with st.sidebar:
 
 # Always read from session_state to propagate to tools
 language = st.session_state.language
-
-# sidebar header
-sidebar_brand(language=language)
 
 # top header (optional)
 st.markdown("# 🪨 onix.scouting")

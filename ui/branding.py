@@ -1,9 +1,5 @@
 # ui/branding.py
 import streamlit as st
-from config import VERSION
-
-def sidebar_brand(language: str = "English"):
-    st.sidebar.caption(f"v{VERSION}")
 
 def footer_brand():
     st.markdown(
