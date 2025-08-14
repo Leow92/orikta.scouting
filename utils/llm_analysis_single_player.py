@@ -130,8 +130,6 @@ def _role_guide(role: str, language: str) -> str:
         return ROLE_GUIDE_FR.get(role, ROLE_GUIDE_FR["mf"])
     return ROLE_GUIDE_EN.get(role, ROLE_GUIDE_EN["mf"])
 
-
-
 def analyze_single_player(
     player: str,
     scout_df,

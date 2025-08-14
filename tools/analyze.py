@@ -130,7 +130,6 @@ def _profile_table_md(full_name: str, items: list[dict], language: str) -> str:
 ---
 """.strip()
 
-
 def analyze_player(players: list, language: str = "English") -> str:
     if not isinstance(players, list) or len(players) != 1:
         return "⚠️ Please provide exactly one player to analyze."
