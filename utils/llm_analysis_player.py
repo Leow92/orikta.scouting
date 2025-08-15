@@ -1,11 +1,9 @@
 # utils/llm_analysis_player.py
 
 from __future__ import annotations
-
 import json
 from datetime import datetime
 from typing import Iterable
-
 import pandas as pd
 import requests
 from requests.exceptions import ReadTimeout
@@ -163,192 +161,13 @@ def _fmt_drivers(drivers: list[tuple[str, float, float]] | None, max_n: int = 5)
 # Main entry                    #
 # ----------------------------- #
 
-def analyze_single_player(
-    player: str,
-    scout_df: pd.DataFrame,
-    language: str = "English",
-    grade_ctx: dict | None = None,
-    std_md: str | None = None,
-) -> str:
-    """
-    Build a compact, role-aware prompt and stream analysis from a local Ollama model.
-    Returns a markdown block; never raises (returns an error string on failure).
-    """
-    try:
-        # Ensure numeric percentiles for ranking (non-destructive)
-        if "Percentile" in scout_df.columns:
-            scout_df = scout_df.copy()
-            scout_df["Percentile"] = pd.to_numeric(scout_df["Percentile"], errors="coerce")
-
-        # Render scout table (source evidence for LLM)
-        table_md = scout_df.to_markdown()
-
-        # Glossary filtered to present metrics
-        gloss = _glossary(language)
-        idx = [str(i) for i in scout_df.index]
-        present = [m for m in gloss if m in idx]
-        if present:
-            glossary_title = "### Scouting Metrics Glossary" if not _is_fr(language) else "### Glossaire des métriques de scouting"
-            glossary_md = "\n".join(f"- **{m}**: {gloss[m]}" for m in present)
-            glossary_block = f"\n{glossary_title}\n{glossary_md}\n"
-        else:
-            glossary_block = ""
-
-        # Role inference + ranked signals
-        role, conf = _infer_role_from_metrics(idx)
-        top_signals, bottom_signals = _rank_signals(scout_df, top_n=8)
-        top_signals_md = _fmt_pairs(top_signals)
-        bottom_signals_md = _fmt_pairs(bottom_signals)
-
-        # Grade role/score context (if any)
-        grade_role_str = None
-        drivers_md = missing_md = ""
-        if grade_ctx:
-            raw_role = str(grade_ctx.get("role", "")).lower()
-            grade_role_str = ROLE_CODE_MAP.get(raw_role, str(grade_ctx.get("role", "")).upper() or "—")
-            drivers_md = _fmt_drivers(grade_ctx.get("drivers"))
-            missing_md = "\n".join(f"- {m}" for m in (grade_ctx.get("missing") or [])[:5]) or "- —"
-
-        # Build prompt
-        prompt = f"""
-You are an **elite tactical football analyst** advising the scouting department of a **top European club**.
-The club may invest a massive transfer fee in this player.
-Deliver a concise, role-aware, evidence-backed report to support a BUY / HOLD / PASS decision.
-
-# INSTRUCTIONS
-
-## 1. Investment Verdict (weighted score)
-Follow the **Investment Verdict Rubric**:
-
-Criteria & Weights (sum = 100):
-1) Role Fit & Current Level (30) — from role grade in {grade_role_str}.
-2) Immediate Impact (20) — average of top-3 role-critical percentiles from scouting table.
-3) Development Upside (15) — from seasonal trends: +5 per clear Improving metric (max +15).
-4) Risk Profile (25) — subtract from 100:  
-   -10 each role-critical weakness <25p (max −30)  
-   -5 each Declining metric in trends (max −15)  
-   -10 if availability risk (low 90s or missing seasonal minutes). Normalize to 0–100.
-5) System Fit / Versatility (10) — award up to 10 if ≥2 systems have 2–3 credible positions justified by strong percentiles; else 5 if only 1 fits; else 0.
-
-Total = weighted sum.  
-Verdict mapping:  
-- BUY: ≥80 & no red flag  
-- HOLD: 65–79 or one moderate risk  
-- PASS: <65 or any red flag
-
-Red flags:
-- Multiple role-critical weaknesses <20p
-- Clear multi-metric decline in trends
-- Availability concern
-
-Confidence (1–5):
-Start at 3; +1 if scouting table has broad coverage; +1 if trends complete/coherent; −1 if key metrics missing; −1 if trends absent.
-
-Report first line: **Verdict — Total/100 (Confidence X/5)**  
-Second line: One-sentence why (role fit + impact + risk summary).
-
----
-
-## 2. Scouting Analysis (scouting table only)
-a) 🟢 Strengths — 3–4 bullets, sorted by percentile DESC.  
-b) 🔴 Weaknesses — 2–3 bullets, sorted by role priority, then lowest percentile first.  
-c) 🟡 Points to Improve — 2–3 actionable levers, sorted by role priority, then impact potential.  
-Format bullets as: *Metric — XXp*: short, role-specific note (≤ 18 words).  
-Do not use seasonal data here.
-
----
-
-## 3. Performance Evolution (seasonal trends only)
-List up to 3 metrics each for:  
-- Improving Metrics  
-- Consistent Metrics  
-- Declining Metrics (give a plausible one-clause reason if relevant: role change, minutes, league strength).  
-Do not use scouting table here.
-
----
-
-## 4. Tactical Fit (scouting table + role context only)
-For each system (**4-3-3**, **4-4-2**, **3-5-2**):  
-List 2–3 best-fit positions + a one-line “because” citing 1–2 key metrics (XXp).  
-Use only positions from taxonomy (fw/mf/df/gk + subroles).  
-No seasonal data.
-
----
-
-# STYLE RULES
-- Valid Markdown only; clear headings.
-- No table reprints; cite metrics as *Name — XXp*.
-- No invented data.
-- If any subsection lacks data: {"insufficient data" if not _is_fr(language) else "donnée indisponible"}.
-- No internal variable names (`grade_ctx` etc.).
-- No emojis except section icons.
-
----
-
-# CONTEXT & DATA (read-only; do not reprint tables)
-
-## Role & Grade
-{grade_role_str}
-
-## Scouting Summary (last 365d)
-{table_md}
-
-## Seasonal Trends — Last Two Seasons
-{std_md}
-
-## Scouting Metrics Glossary
-{glossary_block}
-"""
-
-        payload = {
-            "model": "gemma3",
-            "messages": [{"role": "user", "content": prompt}],
-            "stream": True,
-            "keep_alive": "30m",
-            "options": {
-                "temperature": 0.15,
-            },
-        }
-
-        def _call_ollama() -> str:
-            chunks: list[str] = []
-            with requests.post(OLLAMA_API_URL, json=payload, timeout=300, stream=True) as r:
-                r.raise_for_status()
-                for line in r.iter_lines(decode_unicode=True):
-                    if not line:
-                        continue
-                    try:
-                        ev = json.loads(line)
-                    except Exception:
-                        continue
-                    if isinstance(ev, dict) and ev.get("error"):
-                        # Ollama error payloads sometimes come via "error"
-                        raise RuntimeError(ev["error"])
-                    msg = ev.get("message", {})
-                    if isinstance(msg, dict) and "content" in msg:
-                        chunks.append(msg["content"])
-                    if ev.get("done"):
-                        break
-            return "".join(chunks).strip()
-
-        # One retry on transient read timeout
-        try:
-            content = _call_ollama()
-        except ReadTimeout:
-            content = _call_ollama()
-
-        body = content or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
-        return "### 🧠 LLM Analysis\n\n" + body
-
-    except Exception as e:
-        return f"⚠️ LLM analysis failed: {e}"
-
 def analyze_single_player_workflow(
     player: str,
     scout_df: pd.DataFrame,
     language: str = "English",
     grade_ctx: dict | None = None,
-    std_md: str | None = None,
+    multi_style_md: str | None = None,
+    trend_block_md: str | None = None,
 ) -> str:
     """
     Multi-call LLM workflow:
@@ -365,6 +184,13 @@ def analyze_single_player_workflow(
             scout_df["Percentile"] = pd.to_numeric(scout_df["Percentile"], errors="coerce")
 
         table_md = scout_df.to_markdown()
+
+        if "Percentile" in scout_df.columns:
+            scout_pct_only = scout_df[["Percentile"]].copy()
+            scout_pct_only_md = scout_pct_only.to_markdown(tablefmt="pipe", index=True)
+        else:
+            # Fallback if Percentile missing (shouldn't happen in your pipeline)
+            scout_pct_only_md = "_No percentile data available_"
 
         # Glossary filtered to present metrics
         gloss = _glossary(language)
@@ -439,10 +265,10 @@ def analyze_single_player_workflow(
 
         # ---------- Prompt 1: Investment Verdict ----------
         prompt_verdict = f"""
-You are an elite tactical football analyst advising a top European club.
+You are an elite tactical football analyst advising a top European club. Your club position itself on {player}. 
 
 # TASK
-Produce an investment verdict (BUY / HOLD / PASS) with a weighted score and confidence, using only the rubric below and the provided data.
+You will produce an investment verdict (BUY / HOLD / PASS) with a weighted score and confidence, using only the rubric below and the provided data.
 
 # RUBRIC (weights sum to 100)
 1) Role Fit & Current Level (30) — from role grade in "Role & Grade".
@@ -460,10 +286,6 @@ Red flags: multiple role-critical weaknesses <20p; clear multi-metric decline; a
 
 Confidence (1–5): start 3; +1 broad scouting coverage; +1 coherent complete trends; −1 key metrics missing; −1 trends absent.
 
-# OUTPUT (Markdown)
-First line: **Verdict — Total/100 (Confidence X/5)**
-Second line: one-sentence rationale (role fit + impact + risk).
-
 # DATA
 ## Role & Grade
 {grade_role_str}
@@ -471,17 +293,24 @@ Second line: one-sentence rationale (role fit + impact + risk).
 {(f"- Missing signals:\\n{missing_md}" if grade_ctx else "").strip()}
 
 ## Scouting Summary (last 365d)
-{table_md}
+{scout_pct_only_md}
 
 ## Seasonal Trends (last two seasons)
-{std_md}
+{trend_block_md}
+
+Only provide the output standalone.
 """.strip()
 
         verdict_md = _call_twice(prompt_verdict) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
 
+        # Build once, reuse for Prompts 2 & 4
+        scout_pct_only = scout_df[["Percentile"]].copy()
+        scout_pct_only_md = scout_pct_only.to_markdown(tablefmt="pipe", index=True)
+
+
         # ---------- Prompt 2: Scouting Analysis (scouting only) ----------
         prompt_scouting = f"""
-You are a tactical football analyst.
+You are a tactical football analyst. You are analyzing the performance of {player} in the last 365 days.
 
 # TASK
 Using only the scouting table, produce:
@@ -502,17 +331,19 @@ Bullet format: *Metric — XXp*: short, role-specific note (≤ 18 words). Cite 
 
 # DATA
 ## Scouting Summary (last 365d)
-{table_md}
+{scout_pct_only_md}
 
 ## Scouting Metrics Glossary
 {glossary_block}
+
+Only provide the output standalone.
 """.strip()
 
         scouting_md = _call_twice(prompt_scouting) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
 
         # ---------- Prompt 3: Performance Evolution (trends only) ----------
         prompt_trends = f"""
-You are a tactical football analyst.
+You are a tactical football analyst. You are comparing the performance of {player} between the last two seasons, the data are available in DATA.
 
 # TASK
 From seasonal stats only, list up to 3 metrics each:
@@ -523,17 +354,19 @@ Do not use the scouting table.
 
 # DATA
 ## Seasonal Trends (last two seasons)
-{std_md}
+{trend_block_md}
 
 ## Scouting Metrics Glossary
 {glossary_block}
+
+Only provide the output standalone.
 """.strip()
 
         trends_md = _call_twice(prompt_trends) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
 
         # ---------- Prompt 4: Tactical Fit (scouting + role) ----------
         prompt_tactical = f"""
-You are a tactical football analyst.
+You are a tactical football analyst. You ara analyzing data from {player} to find best {player}'s best tactical fits.
 
 # TASK
 Using the scouting table and role context (no seasonal stats), recommend for each system:
@@ -547,10 +380,15 @@ Use only taxonomy positions (fw/mf/df/gk + subroles).
 
 # DATA
 ## Scouting Summary (last 365d)
-{table_md}
+{scout_pct_only_md}
+
+## Multi Style Positions Table
+{multi_style_md}
 
 ## Scouting Metrics Glossary
 {glossary_block}
+
+Only provide the output standalone.
 """.strip()
 
         tactical_md = _call_twice(prompt_tactical) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")

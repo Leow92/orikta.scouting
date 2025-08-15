@@ -1,21 +1,22 @@
 # tools/analyze.py
 
 from __future__ import annotations
-
 import textwrap
 from typing import Iterable, Optional
-
 import pandas as pd
-
 from utils.fbref_scraper import scrape_all_tables, scrape_player_profile
 from utils.llm_analysis_player import analyze_single_player_workflow  # ← use the optimized light module
 from utils.resolve_player_url import search_fbref_url_with_playwright
-from tools.grading_v2 import (
+#from tools.grading_v2 import (compute_grade, rationale_from_breakdown, normalize_positions_from_profile, compute_grade_for_positions, label_from_pair)
+from tools.grading_v3 import (
+    compute_grade_for_positions_and_styles,
     compute_grade,
     rationale_from_breakdown,
     normalize_positions_from_profile,
     compute_grade_for_positions,
     label_from_pair,
+    PLAY_STYLE_PRESETS,
+    PLAY_STYLE_PRETTY
 )
 
 # ------------------------- #
@@ -177,9 +178,190 @@ def _last_two_seasons_md(std_df_raw: Optional[pd.DataFrame], language: str) -> s
                language)
     return f"{title}\n\n{top2.to_markdown(index=False)}"
 
+# --- Trend columns to consider (ordered by scouting value) ---
+TREND_CANDIDATES = [
+    # per 90 & quality
+    "G+A/90","Gls/90","Ast/90","xG/90","xAG/90","npxG/90",
+    # creation & progression
+    "Shot-Creating Actions","Progressive Passes","Progressive Carries",
+    # stability/availability
+    "90s","Min",
+    # accuracy/retention
+    "Pass Completion %",
+]
+
+def _to_num(x):
+    try:
+        return pd.to_numeric(str(x).replace(",", "").replace("%","").strip(), errors="coerce")
+    except Exception:
+        return pd.NA
+
+def _select_last_two_seasons(df: pd.DataFrame) -> pd.DataFrame:
+    """Sort by season, keep the most-played row per season (by Min or 90s), then take last two seasons."""
+    season_col = _find_season_col(df)
+    if not season_col: 
+        return pd.DataFrame()
+
+    # coerce helper columns
+    df = df.copy()
+    if "Min" in df.columns:
+        df["__Min__"] = df["Min"].map(_to_num)
+    if "90s" in df.columns:
+        df["__90s__"] = df["90s"].map(_to_num)
+
+    # season key & sort recent → old
+    df["__sk__"] = df[season_col].apply(_season_key)
+    df = df[df["__sk__"] > -10**8]  # filter non-season rows
+    if df.empty:
+        return pd.DataFrame()
+    df = df.sort_values("__sk__", ascending=False)
+
+    # choose 1 row per season by max Min, else max 90s, else first
+    chosen = []
+    for sk, grp in df.groupby("__sk__", sort=False):
+        if "__Min__" in grp and grp["__Min__"].notna().any():
+            idx = grp["__Min__"].idxmax()
+        elif "__90s__" in grp and grp["__90s__"].notna().any():
+            idx = grp["__90s__"].idxmax()
+        else:
+            idx = grp.index[0]
+        chosen.append(df.loc[idx])
+    df1 = pd.DataFrame(chosen).sort_values("__sk__", ascending=False)
+
+    # last two seasons only
+    return df1.head(2).reset_index(drop=True)
+
+def _trend_threshold(col: str) -> float:
+    """Minimal change to consider non-noise."""
+    c = col.lower()
+    if "%" in col or "completion" in c:
+        return 1.0   # percentage points
+    if "/90" in c:
+        return 0.10  # per-90 delta
+    if "progressive" in c or "shot-creating" in c:
+        return 0.5
+    if c in ("min","90s"):
+        return 2.0   # two full 90s
+    return 0.5
+
+def _compute_trend_deltas(std_df_raw: pd.DataFrame) -> dict[str, float]:
+    """Return {metric: recent - previous} for candidate columns present."""
+    if std_df_raw is None or std_df_raw.empty:
+        return {}
+    df = _clean_standard_df(std_df_raw)
+    last2 = _select_last_two_seasons(df)
+    if last2.shape[0] < 2:
+        return {}
+
+    # recent (row 0) vs previous (row 1)
+    recent, prev = last2.iloc[0], last2.iloc[1]
+    deltas: dict[str, float] = {}
+    for col in TREND_CANDIDATES:
+        if col in last2.columns:
+            r = _to_num(recent[col])
+            p = _to_num(prev[col])
+            if pd.notna(r) and pd.notna(p):
+                deltas[col] = float(r - p)
+    return deltas
+
+def _classify_trends(deltas: dict[str, float], top_k: int = 3) -> tuple[list[str], list[str], list[str]]:
+    """Split into Improving / Consistent / Declining, sorted by absolute impact and trimmed to top_k."""
+    if not deltas:
+        return [], [], []
+    # apply thresholds
+    improving = [(k, v) for k, v in deltas.items() if v >  _trend_threshold(k)]
+    declining = [(k, v) for k, v in deltas.items() if v < -_trend_threshold(k)]
+    consistent = [k for k, v in deltas.items() if -_trend_threshold(k) <= v <= _trend_threshold(k)]
+
+    # sort by absolute size (desc)
+    improving.sort(key=lambda kv: kv[1], reverse=True)
+    declining.sort(key=lambda kv: kv[1])  # v is negative; ascending = most negative first
+
+    # keep names only
+    improving_names = [k for k, _ in improving[:top_k]]
+    declining_names = [k for k, _ in declining[:top_k]]
+    consistent_names = sorted(consistent)[:top_k]
+
+    return improving_names, consistent_names, declining_names
+
+def build_trend_block_for_llm(std_df_raw: pd.DataFrame, language: str) -> tuple[str, dict]:
+    """
+    Produce a number-free, LLM-friendly block + raw lists for internal use.
+    The block lists metric names only, ordered by computed effect.
+    """
+    deltas = _compute_trend_deltas(std_df_raw)
+    improving, consistent, declining = _classify_trends(deltas, top_k=3)
+
+    if _is_fr(language):
+        title = "### Évolution des performances (2 dernières saisons)"
+        block = [
+            title, "",
+            f"- **En hausse** : {(', '.join(improving)) or '—'}",
+            f"- **Stables** : {(', '.join(consistent)) or '—'}",
+            f"- **En baisse** : {(', '.join(declining)) or '—'}",
+            "",
+            "_Utilise ces listes uniquement ; ne cite aucun nombre._"
+        ]
+    else:
+        title = "### Performance Evolution (last two seasons)"
+        block = [
+            title, "",
+            f"- **Improving Metrics**: {(', '.join(improving)) or '—'}",
+            f"- **Consistent Metrics**: {(', '.join(consistent)) or '—'}",
+            f"- **Declining Metrics**: {(', '.join(declining)) or '—'}",
+            "",
+            "_Use these lists only; do not cite any numbers._"
+        ]
+
+    return "\n".join(block).strip(), {
+        "deltas": deltas,
+        "improving": improving,
+        "consistent": consistent,
+        "declining": declining,
+    }
+
+
 # ------------------------- #
 # Profile helpers           #
 # ------------------------- #
+
+def _pretty_style_name(key: str) -> str:
+    return PLAY_STYLE_PRETTY.get(key, key)
+
+def _build_style_matrix(
+    scout_df: pd.DataFrame,
+    positions: list[tuple[str, str | None]],
+    styles: list[str],
+    style_strength: float = 0.6,
+):
+    """
+    Returns (matrix_df, role_labels_pretty, style_labels_pretty).
+    Index: pretty role labels; Columns: pretty style labels; Values: score/100 (float).
+    """
+    # Compute full matrix
+    matrix = compute_grade_for_positions_and_styles(
+        scout_df, positions=positions, styles=styles, style_strength=style_strength
+    )
+    # Stable order of roles (pretty labels)
+    role_keys = []
+    role_pretty = []
+    seen = set()
+    for base, sub in positions:
+        key = f"{base}:{sub}" if sub else base
+        if key not in seen:
+            seen.add(key)
+            role_keys.append(key)
+            role_pretty.append(label_from_pair(base, sub))
+
+    style_pretty = [_pretty_style_name(s) for s in styles]
+
+    # Fill a dense DataFrame
+    df = pd.DataFrame(index=role_pretty, columns=style_pretty, dtype=float)
+    for rk, sp in zip(role_keys, role_pretty):
+        for s, sname in zip(styles, style_pretty):
+            bd = matrix.get((rk, s))
+            df.loc[sp, sname] = round(bd.final_score, 1) if bd else float("nan")
+    return df, role_pretty, style_pretty
 
 def _parse_label_value_lines(paragraphs: list[str]) -> list[dict]:
     items: list[dict] = []
@@ -230,6 +412,8 @@ def _profile_table_md(full_name: str, items: list[dict], language: str) -> str:
 {rows}
 """.strip()
 
+
+
 # ------------------------- #
 # Main entry                #
 # ------------------------- #
@@ -269,7 +453,12 @@ def analyze_player(players: list[str], language: str = "English") -> str:
                 pos_raw = a.get("value")
                 break
         positions = normalize_positions_from_profile(pos_raw)  # list of (base, sub|None)
-
+        if not positions:
+            if ":" in grade_bd.role:
+                base, sub = grade_bd.role.split(":", 1)
+                positions = [(base, sub)]
+            else:
+                positions = [(grade_bd.role, None)]
         items = _merge_profile_items(profile)
         presentation_md = _profile_table_md(full_name, items, language)
 
@@ -308,11 +497,15 @@ def analyze_player(players: list[str], language: str = "English") -> str:
         # 2b) Standard Stats: last two seasons block
         standard_keys = [k for k in tables.keys() if k.startswith("stats_standard")]
         std2_md = _nodata(language)
+        std_df_raw = None
         if standard_keys:
             chosen = _prefer_stats_standard_key(standard_keys)
             std_df_raw = tables.get(chosen)
             if isinstance(std_df_raw, pd.DataFrame) and not std_df_raw.empty:
                 std2_md = _last_two_seasons_md(std_df_raw, language)
+
+        # NEW: compute trends programmatically (number-free lists)
+        trend_block_md, trend_debug = build_trend_block_for_llm(std_df_raw, language) if std_df_raw is not None else (_nodata(language), {})
 
         # 2c) Deterministic grade (best-guess role)
         role_hint = profile.get("position_hint") or scout_key
@@ -336,6 +529,65 @@ def analyze_player(players: list[str], language: str = "English") -> str:
                 pretty = label_from_pair(role_key, None)
             rows.append(f"| {pretty} | **{bd.final_score:.1f}** | {top_str} | {miss_str} |")
         multi_md = multi_title + "\n" + "\n".join(rows) + "\n"
+
+        # === Style Fit Matrix (roles × team play styles) ===
+        # === Style Fit Matrix (roles × team play styles) ===
+        styles = list(PLAY_STYLE_PRESETS.keys())
+        style_strength = 0.6
+
+        # Compute matrix (rows = pretty role labels, cols = pretty style labels)
+        style_df, roles_pretty, styles_pretty = _build_style_matrix(
+            scout_df, positions, styles, style_strength=style_strength
+        )
+
+        # Title
+        style_title = _t("### 🎛️ Style Fit Matrix — Roles × Team Play Styles",
+                        "### 🎛️ Adéquation au style — Postes × Styles d’équipe",
+                        language)
+
+        # Escape any '|' in labels (just in case)
+        cols = [str(c).replace("|", "\\|") for c in style_df.columns]
+        rows_idx = [str(r).replace("|", "\\|") for r in style_df.index]
+
+        # Header and separator (first col left, numeric cols right)
+        header = "| Role \\ Style | " + " | ".join(cols) + " |"
+        sep_cells = ["---"] + ["---:"] * len(cols)
+        sep = "|" + "|".join(sep_cells) + "|"
+
+        # Safe maxima (skip all-NaN)
+        _valid = style_df.copy()
+        valid_cols = _valid.columns[~_valid.isna().all(axis=0)]
+        valid_rows = _valid.index[~_valid.isna().all(axis=1)]
+        if len(valid_cols) and len(valid_rows):
+            row_max = _valid.loc[valid_rows, valid_cols].idxmax(axis=1)
+            col_max = _valid.loc[valid_rows, valid_cols].idxmax(axis=0)
+        else:
+            row_max = pd.Series(index=_valid.index, dtype=object)
+            col_max = pd.Series(index=_valid.columns, dtype=object)
+
+        lines = [header, sep]
+        for r_label_raw in style_df.index:
+            r_label = str(r_label_raw).replace("|", "\\|")   # NEW: escape
+            cells = []
+            for c_label in style_df.columns:
+                v = style_df.loc[r_label_raw, c_label]
+                if pd.isna(v):
+                    cells.append("—")
+                    continue
+                is_row_best = (r_label in row_max.index) and (row_max.get(r_label) == c_label)
+                is_col_best = (c_label in col_max.index) and (col_max.get(c_label) == r_label)
+                txt = f"{float(v):.1f}"
+                cells.append(f"**{txt}**" if (is_row_best or is_col_best) else txt)
+            lines.append(f"| {r_label} | " + " | ".join(cells) + " |")
+
+        style_note = _t(
+            "_Bold = best style per role and best role per style. Scores are /100. Adjusted with style_strength._",
+            "_Gras = meilleur style par poste et meilleur poste par style. Scores sur 100. Pondérés par style_strength._",
+            language,
+        )
+
+        style_md = style_title + "\n" + "\n".join(lines) + "\n\n" + style_note + "\n"
+
 
         # 2e) Scouting section title
         ctxt = scout_key.replace("scout_summary_", "").upper()
@@ -361,7 +613,8 @@ def analyze_player(players: list[str], language: str = "English") -> str:
             scout_df,
             language=language,
             grade_ctx=grade_ctx,
-            std_md=std2_md,
+            multi_style_md=style_md,
+            trend_block_md=trend_block_md,
         )
 
         print("✅ Report Generation Done.")
@@ -373,6 +626,10 @@ def analyze_player(players: list[str], language: str = "English") -> str:
 {scout_md}
 {SEPARATOR}
 {multi_md}
+{SEPARATOR}
+{style_md}
+{SEPARATOR}
+{std2_md}
 {SEPARATOR}
 {llm_text_light}
 """)

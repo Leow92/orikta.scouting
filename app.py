@@ -56,7 +56,7 @@ with st.sidebar:
 
 # Chat Input (Send on Enter)
 user_input = st.text_input(
-    "💬 Ask your question (e.g. Compare Player 1 and Player2 OR Analyze Player3)",
+    "💬 Ask your question (e.g. Analyze Player)",
     key="input",
     placeholder="e.g. Mbappé vs Salah",
 )
