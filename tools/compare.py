@@ -477,8 +477,9 @@ def compare_players(
             glossary_block=glossary_block,
             call_fn=_call_twice,     # <- inject your function that wraps system-lang + retry
         )
-        return deterministic_md + "\n\n---\n\n" + compare_llm_md
 
+        print("✅ Report Generation Done.")
+        
         return deterministic_md + "\n\n---\n\n" + compare_llm_md
 
     except Exception as e:

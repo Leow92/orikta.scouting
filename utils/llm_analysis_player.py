@@ -17,7 +17,6 @@ OLLAMA_API_URL = "http://localhost:11434/api/chat"
 def report_header() -> str:
     return f"Report generated on {datetime.now().strftime('%Y-%m-%d %H:%M')}"
 
-
 # ----------------------------- #
 # Glossary                      #
 # ----------------------------- #
@@ -313,6 +312,7 @@ Only provide the output standalone.
         # ---------- Prompt 2: Scouting Analysis (scouting only) ----------
         prompt_scouting = f"""
 You are a tactical football analyst. You are analyzing the performance of {player} in the last 365 days.
+{_lang_block(language)}
 
 # TASK
 Using only the scouting table, produce:
@@ -343,9 +343,7 @@ Bullet format: *Metric — XXp*: short, role-specific note (≤ 18 words). Cite 
 
 Only provide the output standalone.
 """.strip()
-
-        scouting_md = _call_twice(prompt_scouting) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
-
+        
         # ---------- Prompt 3: Performance Evolution (trends only) ----------
         prompt_trends = f"""
 You are a tactical football analyst. You are comparing the performance of {player} between the last two seasons, the data are available in DATA.
@@ -372,6 +370,7 @@ Only provide the output standalone.
         # ---------- Prompt 4: Tactical Fit (scouting + role) ----------
         prompt_tactical = f"""
 You are a tactical football analyst. You ara analyzing data from {player} to find best {player}'s best tactical fits.
+{_lang_block(language)}
 
 # TASK
 Using the scouting table and role context (no seasonal stats), recommend for each system:
@@ -399,13 +398,11 @@ Use only taxonomy positions (fw/mf/df/gk + subroles).
 Only provide the output standalone.
 """.strip()
 
-        tactical_md = _call_twice(prompt_tactical) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
-
-
         prompt_summary = f"""
 You are a professional football scout tasked with writing a concise but detailed scouting synthesis for a player.  
 You will be given multiple tables of structured data from a scouting report.  
 These tables are assigned to placeholder variables so you can reference them directly.
+{_lang_block(language)}
 
 ## Variables:
 - {{scouting_metrics_table}} = Table with per90 stats and percentiles for key metrics.
@@ -457,6 +454,8 @@ Now generate the scouting synthesis based on:
 Only provide the output standalone.
 """
         
+        scouting_md = _call_twice(prompt_scouting) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
+        tactical_md = _call_twice(prompt_tactical) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
         summary_md = _call_twice(prompt_summary) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
 
         # ---------- Assemble final markdown ----------

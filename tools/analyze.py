@@ -851,7 +851,7 @@ def analyze_player(
             presentation_md=presentation_md,
         )
 
-        _log("✅ Report Generation Done.")
+        print("✅ Report Generation Done.")
 
         return _md(f"""
 {presentation_md}

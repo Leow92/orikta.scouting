@@ -1,6 +1,7 @@
 # utils/llm_analysis_comparison.py
 from __future__ import annotations
 from typing import Callable
+from utils.lang import _lang_block
 
 def _is_fr(language: str | None) -> bool:
     return (language or "").strip().lower().startswith("fr")
@@ -26,6 +27,7 @@ def compare_llm_workflow(
     # 1) Executive verdict
     prompt1 = f"""
 You are an elite tactical football analyst advising a top European club.
+{_lang_block(language)}
 
 # TASK
 Pick the better signing between **{A_name}** and **{B_name}** for the **{role_label}** role
@@ -74,6 +76,7 @@ Only provide the output standalone.
     # 2) Head-to-head scouting
     prompt2 = f"""
 You are a tactical football analyst.
+{_lang_block(language)}
 
 # TASK
 Head-to-head scouting for **{role_label}** using only percentiles:
@@ -99,6 +102,7 @@ Only provide the output standalone.
     # 3) System fit (percentiles only)
     prompt4 = f"""
 You are a tactical football analyst.
+{_lang_block(language)}
 
 # TASK
 For each system — **4-3-3**, **4-4-2**, **3-5-2** — pick **{A_name}** or **{B_name}** (not both) for the **{role_label}** deployment.
