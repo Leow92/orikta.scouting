@@ -301,12 +301,11 @@ Confidence (1–5): start 3; +1 broad scouting coverage; +1 coherent complete tr
 Only provide the output standalone.
 """.strip()
 
-        verdict_md = _call_twice(prompt_verdict) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
+        #verdict_md = _call_twice(prompt_verdict) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
 
         # Build once, reuse for Prompts 2 & 4
         scout_pct_only = scout_df[["Percentile"]].copy()
         scout_pct_only_md = scout_pct_only.to_markdown(tablefmt="pipe", index=True)
-
 
         # ---------- Prompt 2: Scouting Analysis (scouting only) ----------
         prompt_scouting = f"""
@@ -362,7 +361,7 @@ Do not use the scouting table.
 Only provide the output standalone.
 """.strip()
 
-        trends_md = _call_twice(prompt_trends) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
+        #trends_md = _call_twice(prompt_trends) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
 
         # ---------- Prompt 4: Tactical Fit (scouting + role) ----------
         prompt_tactical = f"""
@@ -394,16 +393,16 @@ Only provide the output standalone.
         tactical_md = _call_twice(prompt_tactical) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
 
         # ---------- Assemble final markdown ----------
-        title_verdict = "### 💼 Verdict" if not _is_fr(language) else "### 💼 Verdict"
+        #title_verdict = "### 💼 Verdict" if not _is_fr(language) else "### 💼 Verdict"
         title_scout = "### 🧾 Scouting Analysis" if not _is_fr(language) else "### 🧾 Analyse scouting"
-        title_trend = "### 📈 Performance Evolution" if not _is_fr(language) else "### 📈 Évolution des performances"
+        #title_trend = "### 📈 Performance Evolution" if not _is_fr(language) else "### 📈 Évolution des performances"
         title_tactic = "### ♟️ Tactical Fit" if not _is_fr(language) else "### ♟️ Adaptation tactique"
 
         final_md = (
             "### 🧠 LLM Analysis\n\n"
-            f"{title_verdict}\n\n{verdict_md}\n\n---\n\n"
+            #f"{title_verdict}\n\n{verdict_md}\n\n---\n\n"
             f"{title_scout}\n\n{scouting_md}\n\n---\n\n"
-            f"{title_trend}\n\n{trends_md}\n\n---\n\n"
+            #f"{title_trend}\n\n{trends_md}\n\n---\n\n"
             f"{title_tactic}\n\n{tactical_md}"
         )
 
