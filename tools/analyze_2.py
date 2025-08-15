@@ -8,7 +8,7 @@ from typing import Iterable, Optional
 import pandas as pd
 
 from utils.fbref_scraper import scrape_all_tables, scrape_player_profile
-from utils.llm_analysis_player import analyze_single_player  # ← use the optimized light module
+from utils.llm_analysis_player import analyze_single_player_workflow  # ← use the optimized light module
 from utils.resolve_player_url import search_fbref_url_with_playwright
 from tools.grading_v2 import (
     compute_grade,
@@ -356,7 +356,7 @@ def analyze_player(players: list[str], language: str = "English") -> str:
             "per_position_top": top_roles_for_llm,
         }
 
-        llm_text_light = analyze_single_player(
+        llm_text_light = analyze_single_player_workflow(
             full_name,
             scout_df,
             language=language,

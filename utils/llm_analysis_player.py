@@ -342,3 +342,234 @@ No seasonal data.
 
     except Exception as e:
         return f"⚠️ LLM analysis failed: {e}"
+
+def analyze_single_player_workflow(
+    player: str,
+    scout_df: pd.DataFrame,
+    language: str = "English",
+    grade_ctx: dict | None = None,
+    std_md: str | None = None,
+) -> str:
+    """
+    Multi-call LLM workflow:
+      1) Investment Verdict (grade + scouting + trends)
+      2) Scouting Analysis (scouting-only)
+      3) Performance Evolution (trends-only)
+      4) Tactical Fit (scouting + role)
+    Returns a stitched markdown block; never raises (returns an error string on failure).
+    """
+    try:
+        # ---------- Prep: numeric safety + render sources ----------
+        if "Percentile" in scout_df.columns:
+            scout_df = scout_df.copy()
+            scout_df["Percentile"] = pd.to_numeric(scout_df["Percentile"], errors="coerce")
+
+        table_md = scout_df.to_markdown()
+
+        # Glossary filtered to present metrics
+        gloss = _glossary(language)
+        idx = [str(i) for i in scout_df.index]
+        present = [m for m in gloss if m in idx]
+        if present:
+            glossary_title = "### Scouting Metrics Glossary" if not _is_fr(language) else "### Glossaire des métriques de scouting"
+            glossary_md = "\n".join(f"- **{m}**: {gloss[m]}" for m in present)
+            glossary_block = f"\n{glossary_title}\n{glossary_md}\n"
+        else:
+            glossary_block = ""
+
+        # Role inference + ranked signals
+        role, conf = _infer_role_from_metrics(idx)
+        top_signals, bottom_signals = _rank_signals(scout_df, top_n=8)
+        top_signals_md = _fmt_pairs(top_signals)
+        bottom_signals_md = _fmt_pairs(bottom_signals)
+
+        # Grade context strings
+        grade_role_str = None
+        drivers_md = missing_md = ""
+        if grade_ctx:
+            raw_role = str(grade_ctx.get("role", "")).lower()
+            grade_role_str = ROLE_CODE_MAP.get(raw_role, str(grade_ctx.get("role", "")).upper() or "—")
+            drivers_md = _fmt_drivers(grade_ctx.get("drivers"))
+            missing_md = "\n".join(f"- {m}" for m in (grade_ctx.get("missing") or [])[:5]) or "- —"
+        # Fallback if no grade_ctx
+        if not grade_role_str:
+            grade_role_str = f"Detected role: {role.upper()} (confidence {conf:.2f})"
+
+        # ---------- Common caller ----------
+        base_payload_opts = {
+            "temperature": 0.15,
+            "top_p": 0.9,
+            "repeat_penalty": 1.05,
+            "num_ctx": 2048,
+            "num_predict": 800,
+        }
+
+        def _ollama_stream(user_content: str) -> str:
+            payload = {
+                "model": "gemma3",
+                "messages": [{"role": "user", "content": user_content}],
+                "stream": True,
+                "keep_alive": "30m",
+                "options": base_payload_opts,
+            }
+            chunks: list[str] = []
+            with requests.post(OLLAMA_API_URL, json=payload, timeout=300, stream=True) as r:
+                r.raise_for_status()
+                for line in r.iter_lines(decode_unicode=True):
+                    if not line:
+                        continue
+                    try:
+                        ev = json.loads(line)
+                    except Exception:
+                        continue
+                    if isinstance(ev, dict) and ev.get("error"):
+                        raise RuntimeError(ev["error"])
+                    msg = ev.get("message", {})
+                    if isinstance(msg, dict) and "content" in msg:
+                        chunks.append(msg["content"])
+                    if ev.get("done"):
+                        break
+            return "".join(chunks).strip()
+
+        def _call_twice(prompt_text: str) -> str:
+            try:
+                return _ollama_stream(prompt_text)
+            except ReadTimeout:
+                return _ollama_stream(prompt_text)
+
+        # ---------- Prompt 1: Investment Verdict ----------
+        prompt_verdict = f"""
+You are an elite tactical football analyst advising a top European club.
+
+# TASK
+Produce an investment verdict (BUY / HOLD / PASS) with a weighted score and confidence, using only the rubric below and the provided data.
+
+# RUBRIC (weights sum to 100)
+1) Role Fit & Current Level (30) — from role grade in "Role & Grade".
+2) Immediate Impact (20) — mean of top-3 **role-critical** percentiles from the scouting table.
+3) Development Upside (15) — from seasonal trends: +5 per clear Improving metric (max +15).
+4) Risk Profile (25) — start 100, subtract:
+   -10 each role-critical weakness <25p (max −30)
+   -5 each Declining metric in trends (max −15)
+   -10 if availability risk (low 90s or missing minutes). Normalize 0–100.
+5) System Fit / Versatility (10) — up to 10 if ≥2 systems show 2–3 credible positions backed by strong percentiles; else 5 if only one fits; else 0.
+
+Total = weighted sum.
+Verdict mapping: BUY (≥80 & no red flag) / HOLD (65–79 or one moderate risk) / PASS (<65 or any red flag).
+Red flags: multiple role-critical weaknesses <20p; clear multi-metric decline; availability concern.
+
+Confidence (1–5): start 3; +1 broad scouting coverage; +1 coherent complete trends; −1 key metrics missing; −1 trends absent.
+
+# OUTPUT (Markdown)
+First line: **Verdict — Total/100 (Confidence X/5)**
+Second line: one-sentence rationale (role fit + impact + risk).
+
+# DATA
+## Role & Grade
+{grade_role_str}
+{(f"- Top weighted drivers:\\n{drivers_md}" if grade_ctx else "").strip()}
+{(f"- Missing signals:\\n{missing_md}" if grade_ctx else "").strip()}
+
+## Scouting Summary (last 365d)
+{table_md}
+
+## Seasonal Trends (last two seasons)
+{std_md}
+""".strip()
+
+        verdict_md = _call_twice(prompt_verdict) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
+
+        # ---------- Prompt 2: Scouting Analysis (scouting only) ----------
+        prompt_scouting = f"""
+You are a tactical football analyst.
+
+# TASK
+Using only the scouting table, produce:
+- 🟢 Strengths — 3–4 bullets, **sorted by percentile DESC**.
+- 🔴 Weaknesses — 2–3 bullets, **sorted by role priority**, then lowest percentile first.
+- 🟡 Points to Improve — 2–3 actionable levers, **sorted by role priority**, then impact potential.
+
+Bullet format: *Metric — XXp*: short, role-specific note (≤ 18 words). Cite percentiles as XXp (rounded). No fabricated values.
+
+# ROLE CONTEXT
+{grade_role_str}
+- Detected role: {role.upper()} (confidence {conf:.2f})
+- Role priorities: {_role_guide(role, language)}
+
+# RANKED HELPERS (do not copy verbatim; for ordering only)
+- Top candidates:\n{top_signals_md}
+- Lowest candidates:\n{bottom_signals_md}
+
+# DATA
+## Scouting Summary (last 365d)
+{table_md}
+
+## Scouting Metrics Glossary
+{glossary_block}
+""".strip()
+
+        scouting_md = _call_twice(prompt_scouting) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
+
+        # ---------- Prompt 3: Performance Evolution (trends only) ----------
+        prompt_trends = f"""
+You are a tactical football analyst.
+
+# TASK
+From seasonal stats only, list up to 3 metrics each:
+- Improving Metrics
+- Consistent Metrics
+- Declining Metrics (add a plausible one-clause reason if relevant: role change, minutes, league strength)
+Do not use the scouting table.
+
+# DATA
+## Seasonal Trends (last two seasons)
+{std_md}
+
+## Scouting Metrics Glossary
+{glossary_block}
+""".strip()
+
+        trends_md = _call_twice(prompt_trends) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
+
+        # ---------- Prompt 4: Tactical Fit (scouting + role) ----------
+        prompt_tactical = f"""
+You are a tactical football analyst.
+
+# TASK
+Using the scouting table and role context (no seasonal stats), recommend for each system:
+- **4-3-3**, **4-4-2**, **3-5-2**: 2–3 best-fit positions, each with a one-line “because” citing 1–2 key metrics (XXp).
+Use only taxonomy positions (fw/mf/df/gk + subroles).
+
+# ROLE CONTEXT
+{grade_role_str}
+- Detected role: {role.upper()} (confidence {conf:.2f})
+- Role priorities: {_role_guide(role, language)}
+
+# DATA
+## Scouting Summary (last 365d)
+{table_md}
+
+## Scouting Metrics Glossary
+{glossary_block}
+""".strip()
+
+        tactical_md = _call_twice(prompt_tactical) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
+
+        # ---------- Assemble final markdown ----------
+        title_verdict = "### 💼 Verdict" if not _is_fr(language) else "### 💼 Verdict"
+        title_scout = "### 🧾 Scouting Analysis" if not _is_fr(language) else "### 🧾 Analyse scouting"
+        title_trend = "### 📈 Performance Evolution" if not _is_fr(language) else "### 📈 Évolution des performances"
+        title_tactic = "### ♟️ Tactical Fit" if not _is_fr(language) else "### ♟️ Adaptation tactique"
+
+        final_md = (
+            "### 🧠 LLM Analysis\n\n"
+            f"{title_verdict}\n\n{verdict_md}\n\n---\n\n"
+            f"{title_scout}\n\n{scouting_md}\n\n---\n\n"
+            f"{title_trend}\n\n{trends_md}\n\n---\n\n"
+            f"{title_tactic}\n\n{tactical_md}"
+        )
+
+        return final_md or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
+
+    except Exception as e:
+        return f"⚠️ LLM analysis failed: {e}"
