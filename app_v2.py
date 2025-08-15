@@ -2,10 +2,10 @@
 
 import time
 import streamlit as st
-from agents.router_v2 import route_command
+from agents.router import route_command
 from utils.prompt_parser import parse_prompt
 from ui.branding import footer_brand
-from tools.grading_v3 import PLAY_STYLE_PRESETS, PLAY_STYLE_PRETTY
+from tools.grading import PLAY_STYLE_PRESETS, PLAY_STYLE_PRETTY
 
 # -------- Page config & light CSS --------
 st.set_page_config(page_title="onix.scouting — Single Player", page_icon="🪨", layout="wide")

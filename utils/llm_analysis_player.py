@@ -168,6 +168,7 @@ def analyze_single_player_workflow(
     grade_ctx: dict | None = None,
     multi_style_md: str | None = None,
     trend_block_md: str | None = None,
+    presentation_md: str | None = None,
 ) -> str:
     """
     Multi-call LLM workflow:
@@ -258,10 +259,18 @@ def analyze_single_player_workflow(
             return "".join(chunks).strip()
 
         def _call_twice(prompt_text: str) -> str:
+            # ➊ Tiny language directive (EN/FR) prepended to every prompt
+            lang_hint = (
+                "Rédige en **français**. Titres et puces en FR. Style concis, analytique."
+                if _is_fr(language)
+                else "Write in **English**. Use English headings and bullets. Keep it concise and analytical."
+            )
+            prefixed = f"{lang_hint}\n\n{prompt_text}"
             try:
-                return _ollama_stream(prompt_text)
+                return _ollama_stream(prefixed)
             except ReadTimeout:
-                return _ollama_stream(prompt_text)
+                return _ollama_stream(prefixed)
+
 
         # ---------- Prompt 1: Investment Verdict ----------
         prompt_verdict = f"""
@@ -335,6 +344,9 @@ Bullet format: *Metric — XXp*: short, role-specific note (≤ 18 words). Cite 
 ## Scouting Metrics Glossary
 {glossary_block}
 
+## Presentation of the Player
+{presentation_md}
+
 Only provide the output standalone.
 """.strip()
 
@@ -387,23 +399,86 @@ Use only taxonomy positions (fw/mf/df/gk + subroles).
 ## Scouting Metrics Glossary
 {glossary_block}
 
+## Presentation of the Player
+{presentation_md}
+
 Only provide the output standalone.
 """.strip()
 
         tactical_md = _call_twice(prompt_tactical) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
+
+
+        prompt_summary = f"""
+You are a professional football scout tasked with writing a concise but detailed scouting synthesis for a player.  
+You will be given multiple tables of structured data from a scouting report.  
+These tables are assigned to placeholder variables so you can reference them directly.
+
+## Variables:
+- {{scouting_metrics_table}} = Table with per90 stats and percentiles for key metrics.
+- {{style_fit_matrix_table}} = Table showing fit scores for roles vs team play styles.
+- {{standard_stats_table}} = Table with season-by-season standard stats for the past two seasons.
+- {{scout_summary_points}} = Short bullet points of strengths, weaknesses, and areas to improve from the current report.
+- {{tactical_fit_points}} = Tactical fit bullet points from the current report.
+- {{presentation_player}} = Presentation of the player
+
+## Task:
+1. Read all data carefully.
+2. Write a **Scouting Synthesis Text Analysis** in a professional recruitment style, 3–5 paragraphs long.
+3. The analysis must:
+   - Summarize the player’s technical, tactical, physical (if available), and mental traits based on the data.
+   - Highlight key statistical strengths and weaknesses, referencing percentile rankings or per90 numbers.
+   - Discuss positional versatility and the style of play the player best suits.
+   - Interpret trends across seasons in {{standard_stats_table}}.
+   - Integrate {{scout_summary_points}} and {{tactical_fit_points}} into the narrative.
+   - Provide a short "Summary Projection" paragraph explaining what level/system the player suits best and what conditions are required for success.
+4. Avoid simply restating the tables — interpret them for a scouting audience.
+5. Keep language concise, analytical, and decision-focused.
+
+## Output format:
+- Paragraph 1: Overview and key profile traits.
+- Paragraph 2: Attacking and creative attributes, referencing key metrics.
+- Paragraph 3: Defensive/physical profile and limitations.
+- Paragraph 4: Tactical fit and adaptability to systems.
+- Paragraph 5: Summary projection for recruitment purposes.
+
+Now generate the scouting synthesis based on:
+{{scouting_metrics_table}}:
+{scout_pct_only_md}
+
+{{style_fit_matrix_table}}
+{multi_style_md}
+
+{{standard_stats_table}}:
+{trend_block_md}
+
+{{scout_summary_points}}:
+{scouting_md}
+
+{{tactical_fit_points}}:
+{tactical_md}
+
+{{presentation_player}}:
+{presentation_md}
+
+Only provide the output standalone.
+"""
+        
+        summary_md = _call_twice(prompt_summary) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
 
         # ---------- Assemble final markdown ----------
         #title_verdict = "### 💼 Verdict" if not _is_fr(language) else "### 💼 Verdict"
         title_scout = "### 🧾 Scouting Analysis" if not _is_fr(language) else "### 🧾 Analyse scouting"
         #title_trend = "### 📈 Performance Evolution" if not _is_fr(language) else "### 📈 Évolution des performances"
         title_tactic = "### ♟️ Tactical Fit" if not _is_fr(language) else "### ♟️ Adaptation tactique"
+        title_summary = "### ♟️ Overall Summary" if not _is_fr(language) else "### ♟️ Résumé Gloab"
 
         final_md = (
             "### 🧠 LLM Analysis\n\n"
             #f"{title_verdict}\n\n{verdict_md}\n\n---\n\n"
             f"{title_scout}\n\n{scouting_md}\n\n---\n\n"
             #f"{title_trend}\n\n{trends_md}\n\n---\n\n"
-            f"{title_tactic}\n\n{tactical_md}"
+            f"{title_tactic}\n\n{tactical_md}\n\n---\n\n"
+            f"{title_summary}\n\n{summary_md}"
         )
 
         return final_md or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
