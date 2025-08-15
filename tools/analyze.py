@@ -126,6 +126,114 @@ def _profile_table_md(full_name: str, items: list[dict], language: str) -> str:
 {rows}
 """.strip()
 
+# --- add near your other helpers in tools/analyze.py ---
+
+# --- FBref "Standard Stats" canonical headers (domestic league) ---
+CANON_STANDARD_HEADERS = [
+    "Season","Age","Squad","Country","Comp","LgRank",
+    "MP","Starts","Min","90s",
+    "Gls","Ast","G+A","G-PK","PK","PKatt","CrdY","CrdR",
+    "xG","npxG","xAG","npxG+xAG",
+    "PrgC","PrgP","PrgR",
+    "Gls/90","Ast/90","G+A/90","G-PK/90","G+A-PK/90",
+    "xG/90","xAG/90","xG+xAG/90","npxG/90","npxG+xAG/90",
+    "Matches"
+]
+
+SEASON_TOKENS = ("season","seasons","yr","year")
+
+def _looks_numeric_cols(cols) -> bool:
+    try:
+        return sum(str(c).isdigit() for c in cols) >= max(3, int(0.7 * len(cols)))
+    except Exception:
+        return False
+
+def _season_key(v: str) -> int:
+    s = str(v or "")
+    for sep in ("-","/","–","—"):
+        if sep in s and s[:4].isdigit():
+            try: return int(s.split(sep)[0])
+            except: return -10**9
+    return int(s[:4]) if s[:4].isdigit() else -10**9
+
+def _find_season_col(df: pd.DataFrame):
+    # 1) direct named
+    for c in df.columns:
+        if str(c).strip().lower() in SEASON_TOKENS:
+            return c
+    # 2) if first column values look like seasons, use it
+    if not df.empty:
+        first = df.columns[0]
+        sample = str(df.iloc[0, 0])
+        if any(sep in sample for sep in ("-","/","–","—")) and sample[:4].isdigit():
+            return first
+    # 3) fallback
+    return df.columns[0] if len(df.columns) else None
+
+def _clean_standard_df(std_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    If columns are numeric (0..N), rename with canonical headers (trimmed).
+    Also drop fully empty rows and strip commas in numeric-like fields.
+    """
+    df = std_df.copy()
+    # simple header promotion if first row *looks* like text headers
+    if _looks_numeric_cols(df.columns):
+        # keep raw; many FBref tables are already data rows
+        pass
+    else:
+        # if first row contains tokens like 'season', set as header
+        try:
+            first = df.iloc[0].astype(str).str.lower().tolist()
+            if any(tok in first for tok in ("season","age","squad","comp","team")):
+                df.columns = df.iloc[0]
+                df = df.iloc[1:].reset_index(drop=True)
+        except Exception:
+            pass
+
+    # if still numeric columns, map to canonical names (trim to width)
+    if _looks_numeric_cols(df.columns):
+        w = len(df.columns)
+        df.columns = CANON_STANDARD_HEADERS[:w]
+
+    # basic cleanup
+    df = df.replace({"": pd.NA})
+    df = df.dropna(how="all")
+    # strip commas from Minutes etc. (won't error if non-string)
+    for col in df.columns:
+        try:
+            df[col] = df[col].astype(str).str.replace(",", "", regex=False)
+        except Exception:
+            pass
+    return df
+
+def _last_two_seasons_md(std_df_raw: pd.DataFrame, language: str) -> str:
+    if std_df_raw is None or std_df_raw.empty:
+        return "donnée indisponible" if (language or "").lower().startswith("fr") else "insufficient data"
+
+    df = _clean_standard_df(std_df_raw)
+    season_col = _find_season_col(df)
+    if season_col is None or season_col not in df.columns:
+        return "donnée indisponible" if (language or "").lower().startswith("fr") else "insufficient data"
+
+    # sort recent → oldest
+    df["__sk__"] = df[season_col].apply(_season_key)
+    df = df.sort_values("__sk__", ascending=False).drop(columns="__sk__", errors="ignore")
+
+    # choose readable subset if present
+    pref = [
+        "Season","Age","Squad","Comp","MP","Starts","Min","90s",
+        "Gls","Ast","G+A","G-PK","xG","npxG","xAG","npxG+xAG",
+        "PrgC","PrgP","PrgR",
+        "Gls/90","Ast/90","G+A/90","xG/90","xAG/90","xG+xAG/90","npxG/90","npxG+xAG/90"
+    ]
+    cols = [c for c in pref if c in df.columns] or list(df.columns)
+
+    top2 = df[cols].head(2)
+    title = "### 📚 Standard Stats (last two seasons)" if not (language or "").lower().startswith("fr") \
+            else "### 📚 Statistiques standards (2 dernières saisons)"
+    return f"{title}\n\n{top2.to_markdown(index=False)}"
+
+
 def analyze_player(players: list, language: str = "English") -> str:
     if not isinstance(players, list) or len(players) != 1:
         return "⚠️ Please provide exactly one player to analyze."
@@ -162,6 +270,7 @@ def analyze_player(players: list, language: str = "English") -> str:
 
         # 2a) Scouting table (Last 365d vs position group)
         scout_key = next((k for k in tables.keys() if k.startswith("scout_summary")), None)
+        print(scout_key)
         if not scout_key:
             return f"{presentation_md}\n⚠️ Could not find a scouting table for {full_name}."
 
@@ -190,12 +299,20 @@ def analyze_player(players: list, language: str = "English") -> str:
         # render as pipe table
         scout_md = display_df.to_markdown(tablefmt="pipe", index=True)
 
-        # 2b) Deterministic grade (single best-guess role)
+        # 2b) Standard Stats (extract last 2 seasons only)
+        standard_keys = [k for k in tables.keys() if k.startswith("stats_standard")]
+        std2_md = "donnée indisponible" if (language or "").lower().startswith("fr") else "insufficient data"
+        if standard_keys:
+            chosen = _prefer_stats_standard_key(standard_keys)
+            std_df_raw = tables[chosen].copy()
+            std2_md = _last_two_seasons_md(std_df_raw, language)
+
+        # 2c) Deterministic grade (single best-guess role)
         role_hint = profile.get("position_hint") or scout_key
         grade_bd = compute_grade(scout_df, role_hint=role_hint)
         grade_md = rationale_from_breakdown(grade_bd, language=language)
 
-        # 🔥 2c) Multi‑position grades (NOW that scout_df exists)
+        # 🔥 2d) Multi‑position grades (NOW that scout_df exists)
         per_pos = compute_grade_for_positions(scout_df, positions)
         # sort by score desc for the table
         per_pos_sorted = dict(sorted(per_pos.items(), key=lambda kv: kv[1].final_score, reverse=True))
@@ -242,6 +359,7 @@ def analyze_player(players: list, language: str = "English") -> str:
             scout_df,
             language=language,
             grade_ctx=grade_ctx,   # passes best‑guess + top per‑position ranks
+            std_md=std2_md,
         )
 
         print("✅ Report Generation Done.")

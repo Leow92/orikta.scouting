@@ -135,6 +135,7 @@ def analyze_single_player(
     scout_df,
     language: str = "English",
     grade_ctx: dict | None = None,
+    std_md: str | None = None,
 ) -> str:
     try:
         if "Percentile" in scout_df.columns:
@@ -172,36 +173,10 @@ def analyze_single_player(
 {fmt_list(bottom_signals) if bottom_signals else "- aucun"}
 **Priorités du poste** : { _role_guide(role, 'Français') }"""
 
-        ranked_block = ranked_block_fr if (language or "").lower().startswith("fr") else ranked_block_en
-
-        # Labels
-        section1 = "Analyse du Scouting (365 jours)" if language.lower().startswith("fr") else "Scouting Summary Analysis (last 365 days)"
-        strengths = "🟢 Forces" if language.lower().startswith("fr") else "🟢 Strengths"
-        weaknesses = "🔴 Faiblesses" if language.lower().startswith("fr") else "🔴 Weaknesses"
-        improve = "🟡 Axes d'amélioration" if language.lower().startswith("fr") else "🟡 Points to Improve"
-        tactical = "Astuce tactique" if language.lower().startswith("fr") else "Tactical Tip"
-
-        output_format = f"""
-### 1) {section1}
-- Provide three subsections as bullet lists:
-  - {strengths} (top high percentiles tailored to relevant to role)
-  - {weaknesses} (rank the weaknesses from top priority to low priority depending on player position, low percentiles and negative signals)
-  - {improve} (rank the improvements points from top priority to low priority depending on player position, concrete, metric‑based improvements)
-
-### 2) {tactical}
-- For each system, list 2–3 best‑fit roles:
-  - **4‑3‑3**
-  - **4‑4‑2**
-  - **3‑5‑2**
-- Tie each role to specific metrics/signals.
-"""
-
         # Prompt (short glossary + role guide + ranked candidates)
         glossary_title = "### Scouting Metrics Glossary" if not language.lower().startswith("fr") else "### Glossaire des métriques de scouting"
         glossary_block = f"\n{glossary_title}\n{glossary_md}\n" if glossary_md else ""
-        ranked_title = "### Role Context & Ranked Signals" if not language.lower().startswith("fr") else "### Contexte poste & signaux classés"
-
-        grade_block = ""
+        
         # ---- Build grade/per-position context blocks (append, don't overwrite) ----
         grade_parts = []
 
@@ -249,30 +224,85 @@ def analyze_single_player(
                     f"- Missing signals:\n{missing_md}"
                 )
 
-        # Join all grade-related blocks once
-        grade_block = ("\n\n" + "\n\n".join(grade_parts) + "\n\n") if grade_parts else ""
+        grade_role_str = None
+        if grade_ctx:
+            raw_role = str(grade_ctx.get("role", "")).lower()
+            grade_role_str = role_map.get(raw_role, str(grade_ctx.get("role","")).upper() or "—")
+
+        # --- optional: tidy top/bottom signals rendering once, reuse below ---
+        def _fmt_pairs(pairs): 
+            return "\n".join(f"- {m} — {int(p)}p" for m,p in pairs) if pairs else "- —"
+        
+        top_signals_md = _fmt_pairs(top_signals)
+        bottom_signals_md = _fmt_pairs(bottom_signals)
 
         prompt = f"""
         {report_header()}
-        You are a **tactical football analyst**.
+
+        You are a **tactical football analyst** writing for **coaches, scouts, and performance analysts**.
+        Audience expects concise, role-aware insights they can act on. Be precise, not chatty.
 
         {_lang_block(language)}
 
-        {ranked_title}
-        {ranked_block}
-        {grade_block}
-        {glossary_block}
-        #### REQUIRED DATA — Scout Summary (per 90 + percentiles, last 365 days)
+        ### PLAYER
+        - Name: {player}
+
+        ### ROLE CONTEXT
+        - If `grade_ctx` is present, **LOCK** the primary role to `grade_ctx.role`. Otherwise use the detected role below.
+        - Detected role: {role.upper()} (confidence {conf:.2f})
+        - Role priorities: {_role_guide(role, language)}
+        {(f"- Grade role: {grade_role_str} | Score: {grade_ctx.get('score','—')}/100" if grade_ctx else "").strip()}
+        {(f"- Top weighted drivers:\\n" + "\\n".join(f"  - {m} (w={float(w):.2f})" for (m,w,_) in (grade_ctx.get('drivers') or [])[:5]) if grade_ctx else "").strip()}
+        {(f"- Missing signals:\\n" + "\\n".join(f"  - {m}" for m in (grade_ctx.get('missing') or [])[:5]) if grade_ctx else "").strip()}
+
+        ### KNOWLEDGE — Career context (Standard stats, last two seasons)
+        - Treat this table as **trend context only**. Do **not** reprint or quote exact numbers.
+        {std_md}
+
+        ### SIGNALS — Scout summary (primary, last 365d)
+        - This table is the **primary** evidence for strengths/weaknesses.
+        - When you cite a percentile, round to an integer and append **p** (e.g., 92p). Never output placeholder values.
+        - Do **not** fabricate any numbers or metrics.
         {table_md}
 
-        #### OUTPUT FORMAT (use {language} headings)
-        {output_format}
+        ### Ranked signals (helper — do not reprint lists verbatim)
+        - Top candidates:
+        {top_signals_md}
+        - Lowest candidates:
+        {bottom_signals_md}
 
-        **Rules**:
-        - Do NOT fabricate values.
-        - Order items strictly by **impact for the detected role**; when grade context is present, align priorities with the **top weighted drivers** and **penalize missing signals**.
-        - Deprioritize metrics with low role relevance (e.g., goals for DF).
-        - Reference metrics with names and percentiles where possible.
+        {glossary_block}
+
+        ### OUTPUT (use {language} headings; valid Markdown only)
+        1) **Scouting Synthesis (last 365d)**
+        a. **🟢 Strengths**: Prioritize metrics most relevant to the **locked role** and **grade drivers**.
+            - Bullet format (hard cap 18 words): *Metric — XXp*: impact statement tied to role value.
+        b. **🔴 Weaknesses**: Order by **tactical risk** for the role. Same bullet format.
+        c. **🟡 Points to Improve**: Order by **tactical risk** for the role. Same bullet format.
+
+        2) **Trends vs Last Two Seasons (context from Standard stats)**
+        - **Improving Metrics**: up to 3 metric names, provide numbers.
+        - **Consistent Metrics**: up to 3 metric names, provide numbers.
+        - **Declining Metrics**: up to 3 metric names, provide numbers.
+        - If scout percentiles and trends conflict, add **one short clause** explaining a plausible reason.
+
+        3) **Tactical Fit**
+        - **4-3-3**: best-fit position with 2 sentences explanation.
+        - **4-4-2**: best-fit position with 2 sentences explanation.
+        - **3-5-2**: best-fit position with 2 sentences explanation.
+        - Use only positions from the taxonomy (fw/mf/df/gk and subroles).
+
+        4) **Summary Box (2 lines)**
+        - Best system + best position + **Grade X/100** (from {grade_role_str} if present).
+        - Three adjectives (comma-separated, lowercase).
+
+        ### STYLE / RULES
+        - Be crisp; **no filler**. Do **not** reprint tables.
+        - Refer to metrics by **name + XXp** when citing percentiles; otherwise avoid numbers.
+        - Align priorities with **role relevance** and **grade_ctx drivers**; penalize **missing signals** when appropriate.
+        - If any required data is missing, write: { "insufficient data" if not (language or "").lower().startswith("fr") else "donnée indisponible" } for that subsection only.
+        - Do **not** mention `grade_ctx` or internal helpers explicitly; use their content implicitly.
+        - No emojis beyond the specified section icons.
         """
 
         payload = {
@@ -281,7 +311,9 @@ def analyze_single_player(
             "stream": True,            # <-- make the API stream
             "keep_alive": "30m",
             "options": {
-                "temperature": 0.2,
+                "temperature": 0.15,
+                "num_ctx": 2048,
+                "num_predict": 1000
             },
         }
 
