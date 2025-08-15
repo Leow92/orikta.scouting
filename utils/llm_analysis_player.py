@@ -312,9 +312,8 @@ Only provide the output standalone.
         # ---------- Prompt 2: Scouting Analysis (scouting only) ----------
         prompt_scouting = f"""
 You are a tactical football analyst. You are analyzing the performance of {player} in the last 365 days.
-{_lang_block(language)}
 
-# TASK
+TASK
 Using only the scouting table, produce:
 - 🟢 Strengths — 3–4 bullets, **sorted by percentile DESC**.
 - 🔴 Weaknesses — 2–3 bullets, **sorted by role priority**, then lowest percentile first.
@@ -322,16 +321,16 @@ Using only the scouting table, produce:
 
 Bullet format: *Metric — XXp*: short, role-specific note (≤ 18 words). Cite percentiles as XXp (rounded). No fabricated values.
 
-# ROLE CONTEXT
+ROLE CONTEXT
 {grade_role_str}
 - Detected role: {role.upper()} (confidence {conf:.2f})
 - Role priorities: {_role_guide(role, language)}
 
-# RANKED HELPERS (do not copy verbatim; for ordering only)
+RANKED HELPERS (do not copy verbatim; for ordering only)
 - Top candidates:\n{top_signals_md}
 - Lowest candidates:\n{bottom_signals_md}
 
-# DATA
+DATA
 ## Scouting Summary (last 365d)
 {scout_pct_only_md}
 
@@ -342,6 +341,7 @@ Bullet format: *Metric — XXp*: short, role-specific note (≤ 18 words). Cite 
 {presentation_md}
 
 Only provide the output standalone.
+{_lang_block(language)}
 """.strip()
         
         # ---------- Prompt 3: Performance Evolution (trends only) ----------
@@ -370,19 +370,18 @@ Only provide the output standalone.
         # ---------- Prompt 4: Tactical Fit (scouting + role) ----------
         prompt_tactical = f"""
 You are a tactical football analyst. You ara analyzing data from {player} to find best {player}'s best tactical fits.
-{_lang_block(language)}
 
-# TASK
+TASK
 Using the scouting table and role context (no seasonal stats), recommend for each system:
 - **4-3-3**, **4-4-2**, **3-5-2**: 2–3 best-fit positions, each with a one-line “because” citing 1–2 key metrics (XXp).
 Use only taxonomy positions (fw/mf/df/gk + subroles).
 
-# ROLE CONTEXT
+ROLE CONTEXT
 {grade_role_str}
 - Detected role: {role.upper()} (confidence {conf:.2f})
 - Role priorities: {_role_guide(role, language)}
 
-# DATA
+DATA
 ## Scouting Summary (last 365d)
 {scout_pct_only_md}
 
@@ -396,15 +395,18 @@ Use only taxonomy positions (fw/mf/df/gk + subroles).
 {presentation_md}
 
 Only provide the output standalone.
+{_lang_block(language)}
 """.strip()
+
+        scouting_md = _call_twice(prompt_scouting) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
+        tactical_md = _call_twice(prompt_tactical) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
 
         prompt_summary = f"""
 You are a professional football scout tasked with writing a concise but detailed scouting synthesis for a player.  
 You will be given multiple tables of structured data from a scouting report.  
 These tables are assigned to placeholder variables so you can reference them directly.
-{_lang_block(language)}
 
-## Variables:
+Variables:
 - {{scouting_metrics_table}} = Table with per90 stats and percentiles for key metrics.
 - {{style_fit_matrix_table}} = Table showing fit scores for roles vs team play styles.
 - {{standard_stats_table}} = Table with season-by-season standard stats for the past two seasons.
@@ -412,7 +414,7 @@ These tables are assigned to placeholder variables so you can reference them dir
 - {{tactical_fit_points}} = Tactical fit bullet points from the current report.
 - {{presentation_player}} = Presentation of the player
 
-## Task:
+Task:
 1. Read all data carefully.
 2. Write a **Scouting Synthesis Text Analysis** in a professional recruitment style, 3–5 paragraphs long.
 3. The analysis must:
@@ -425,7 +427,7 @@ These tables are assigned to placeholder variables so you can reference them dir
 4. Avoid simply restating the tables — interpret them for a scouting audience.
 5. Keep language concise, analytical, and decision-focused.
 
-## Output format:
+Output format:
 - Paragraph 1: Overview and key profile traits.
 - Paragraph 2: Attacking and creative attributes, referencing key metrics.
 - Paragraph 3: Defensive/physical profile and limitations.
@@ -451,11 +453,10 @@ Now generate the scouting synthesis based on:
 {{presentation_player}}:
 {presentation_md}
 
-Only provide the output standalone.
+Only provide the output standalone. 
+{_lang_block(language)}
 """
         
-        scouting_md = _call_twice(prompt_scouting) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
-        tactical_md = _call_twice(prompt_tactical) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
         summary_md = _call_twice(prompt_summary) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
 
         # ---------- Assemble final markdown ----------
@@ -463,7 +464,7 @@ Only provide the output standalone.
         title_scout = "### 🧾 Scouting Analysis" if not _is_fr(language) else "### 🧾 Analyse scouting"
         #title_trend = "### 📈 Performance Evolution" if not _is_fr(language) else "### 📈 Évolution des performances"
         title_tactic = "### ♟️ Tactical Fit" if not _is_fr(language) else "### ♟️ Adaptation tactique"
-        title_summary = "### ♟️ Overall Summary" if not _is_fr(language) else "### ♟️ Résumé Gloab"
+        title_summary = "### ♟️ Overall Summary" if not _is_fr(language) else "### ♟️ Résumé Global"
 
         final_md = (
             "### 🧠 LLM Analysis\n\n"
