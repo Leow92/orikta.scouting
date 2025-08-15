@@ -18,6 +18,7 @@ from tools.grading import (
     PLAY_STYLE_PRESETS,
     PLAY_STYLE_PRETTY
 )
+from utils.lang import _is_fr
 
 # ------------------------- #
 # Config & small utilities  #
@@ -28,9 +29,6 @@ VERBOSE = False  # set True for console diagnostics
 def _log(msg: str) -> None:
     if VERBOSE:
         print(msg)
-
-def _is_fr(language: str | None) -> bool:
-    return (language or "").strip().lower().startswith("fr")
 
 def _md(s: str) -> str:
     """Dedent and strip a multi-line Markdown string."""

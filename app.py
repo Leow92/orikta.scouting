@@ -68,14 +68,26 @@ def _t(key: str) -> str:
 st.set_page_config(page_title="onix.scouting — Single Player", page_icon="🪨", layout="wide")
 st.markdown("""
 <style>
+/* Base */
 .block-container { padding-top: 1rem; padding-bottom: 2rem; }
-table { width: 100%; border-collapse: collapse; }
-th, td { border: 1px solid #e5e7eb; padding: 6px; }
-th { background: #f8fafc; color: #111; font-weight: 600; }
-td { color: #111; }
 hr { border: none; border-top: 1px solid #e5e7eb; margin: 24px 0; }
 .small { color:#6b7280; font-size: 0.9rem; }
 .kbd { padding: 2px 6px; border-radius: 4px; border:1px solid #d1d5db; }
+
+/* Tables (thèmes clair & sombre) */
+.stMarkdown table { width: 100%; border-collapse: collapse; }
+.stMarkdown th, .stMarkdown td { padding: 6px; border: 1px solid var(--onix-border, #e5e7eb); }
+
+/* Clair par défaut */
+.stMarkdown th { background: var(--onix-th-bg, #f8fafc); color: var(--onix-th-text, #111); font-weight: 600; }
+/* On NE FORCE PAS la couleur des td : elles héritent du thème */
+
+/* Sombre */
+@media (prefers-color-scheme: dark) {
+  .stMarkdown th, .stMarkdown td { border-color: #374151; }
+  .stMarkdown th { background: #111827; color: #e5e7eb; }
+  /* Pas de couleur forcée sur td : le thème fournit déjà un texte clair */
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -85,12 +97,14 @@ with st.sidebar:
     current_lang = st.session_state.get("language", "English")
     idx = 1 if str(current_lang).lower().startswith("fr") else 0
     selection = st.radio(
-        label="",
+        "Language",                             # <= non-empty
         options=["English", "Français"],
         index=idx,
         horizontal=True,
-        key="lang_selector"
+        key="lang_selector",
+        label_visibility="collapsed",           # <= hide label in UI
     )
+
     st.session_state.language = "Français" if selection.startswith("Fr") else "English"
     language = st.session_state.language
 
@@ -100,14 +114,20 @@ with st.sidebar:
     style_labels = {k: PLAY_STYLE_PRETTY.get(k, k) for k in styles_all}
     prev_styles = st.session_state.get("_onix_styles", styles_all)
     styles = st.multiselect(
-        _t("sidebar_select_styles"),
+        "Team play styles",                     # <= non-empty
         options=styles_all,
         default=prev_styles,
         format_func=lambda k: style_labels.get(k, k),
-        key="styles"
+        key="styles",
+        label_visibility="collapsed",
     )
-    style_strength = st.slider(_t("sidebar_style_strength"), 0.0, 1.0,
-                               st.session_state.get("_onix_style_strength", 0.6), 0.05)
+    style_strength = st.slider(
+        "Style influence",                      # <= non-empty
+        0.0, 1.0,
+        st.session_state.get("_onix_style_strength", 0.6),
+        0.05,
+        label_visibility="collapsed",
+    )
 
     st.markdown("---")
     fast_preview = st.toggle(
@@ -137,11 +157,12 @@ st.session_state.setdefault("selected_history_index", 0)
 # -------- Input form (single chat bar + Generate) --------
 with st.form(key="query_form", clear_on_submit=False):
     user_input = st.text_input(
-        _t("input_label"),
-        value="",
-        placeholder=_t("input_placeholder"),
-        key="user_input"
+        "Prompt",                               # <= non-empty
+        key="input",
+        placeholder="e.g. Analyze: Rayan Cherki",
+        label_visibility="collapsed",           # <= hide label
     )
+
     submitted = st.form_submit_button(_t("generate"), type="primary", use_container_width=True)
 
 # -------- Run pipeline on submit --------
@@ -192,7 +213,13 @@ with st.sidebar:
     st.markdown(f"### {_t('sidebar_history')}")
     if st.session_state.history:
         prompt_options = [f"{i+1}. {h['prompt']}" for i, h in enumerate(st.session_state.history)]
-        sel = st.selectbox("", options=prompt_options, index=st.session_state.selected_history_index, key="history_selector")
+        sel = st.selectbox(
+            _t("sidebar_history"),  # or "Select a past result"
+            options=prompt_options,
+            index=st.session_state.selected_history_index,
+            key="history_selector",
+            label_visibility="collapsed",
+        )
         st.session_state.selected_history_index = prompt_options.index(sel)
     else:
         st.info(_t("sidebar_history_empty"))
@@ -203,7 +230,12 @@ if st.session_state.history:
     st.markdown(f"### {_t('result_title')}")
     st.markdown(chosen["response"])
     styles_chosen = ", ".join(chosen.get("styles", [])) or "—"
-    st.caption(_t("meta_line").format(s=chosen.get("elapsed", 0.0), lang=chosen.get("language"), styles=styles_chosen))
+    mode = "Fast" if chosen.get("skip_llm") else "Full"
+    st.caption(_t("meta_line").format(
+        s=chosen.get("elapsed", 0.0),
+        lang=chosen.get("language"),
+        styles=styles_chosen
+    ) + f" • Mode: {mode}")
 
     # Downloads
     st.divider()

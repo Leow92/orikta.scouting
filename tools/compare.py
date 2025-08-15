@@ -22,6 +22,8 @@ from tools.grading import (
     NEGATIVE_KEYS, ALIASES,
     PLAY_STYLE_PRESETS, PLAY_STYLE_PRETTY
 )
+from utils.llm_analysis_comparison import compare_llm_workflow
+from utils.lang import _is_fr, _lang_block, _glossary_block_for
 
 # --- LLM basics (same as your single-player workflow) ---
 OLLAMA_API_URL = "http://localhost:11434/api/chat"
@@ -33,57 +35,6 @@ BASE_OPTS = {
     "num_predict": 800,
 }
 
-# -----------------------------
-# Language utils (mirror your patterns)
-# -----------------------------
-def _is_fr(language: str | None) -> bool:
-    return (language or "").strip().lower().startswith("fr")
-
-def _glossary_block_for(language: str, present_metrics: List[str]) -> str:
-    # Minimal glossary like in utils/llm_analysis_player.py
-    SCOUT_METRIC_GLOSSARY_EN = {
-        "Non-Penalty Goals": "Goals scored excluding penalties",
-        "npxG": "Expected goals, non-penalty",
-        "xAG": "Expected assisted goals",
-        "Shots Total": "Total shots attempted",
-        "Shot-Creating Actions": "Actions leading to a shot",
-        "Passes Attempted": "Total passes attempted",
-        "Pass Completion %": "Percentage of passes completed",
-        "Progressive Passes": "Passes moving the ball significantly towards goal",
-        "Progressive Carries": "Carries moving the ball significantly towards goal",
-        "Successful Take-Ons": "Dribbles successfully beating an opponent",
-        "Touches (Att Pen)": "Touches in opponent’s penalty area",
-        "Tackles": "Tackles made",
-        "Interceptions": "Interceptions of opponent’s passes",
-        "Blocks": "Blocks of shots, passes, or crosses",
-        "Clearances": "Clearances from defensive area",
-        "Aerials won %": "Share of aerial duels won",
-    }
-    SCOUT_METRIC_GLOSSARY_FR = {
-        "Non-Penalty Goals": "Buts marqués hors penalties",
-        "npxG": "Buts attendus hors penalty",
-        "xAG": "Passes décisives attendues",
-        "Shots Total": "Tirs tentés",
-        "Shot-Creating Actions": "Actions menant à un tir",
-        "Passes Attempted": "Passes tentées",
-        "Pass Completion %": "Pourcentage de passes réussies",
-        "Progressive Passes": "Passes faisant progresser vers le but",
-        "Progressive Carries": "Conduites progressives",
-        "Successful Take-Ons": "Dribbles réussis",
-        "Touches (Att Pen)": "Touches dans la surface adverse",
-        "Tackles": "Tacles réalisés",
-        "Interceptions": "Interceptions",
-        "Blocks": "Contres (tirs/passes/centres)",
-        "Clearances": "Dégagements",
-        "Aerials won %": "Pourcentage de duels aériens gagnés",
-    }
-    G = SCOUT_METRIC_GLOSSARY_FR if _is_fr(language) else SCOUT_METRIC_GLOSSARY_EN
-    present = [m for m in G if m in present_metrics]
-    if not present:
-        return ""
-    title = "### Scouting Metrics Glossary" if not _is_fr(language) else "### Glossaire des métriques de scouting"
-    lines = "\n".join(f"- **{m}**: {G[m]}" for m in present)
-    return f"\n{title}\n{lines}\n"
 
 # -----------------------------
 # Deterministic helpers
@@ -331,15 +282,24 @@ def _fetch_player(name: str, language: str = "English"):
 # -----------------------------
 # LLM streaming
 # -----------------------------
-def _ollama_stream(prompt_text: str) -> str:
+def _ollama_stream(user_content: str, language: str) -> str:
     payload = {
         "model": "gemma3",
-        "messages": [{"role": "user", "content": prompt_text}],
+        "messages": [
+            {"role": "system", "content": _lang_block(language)},   # <-- language enforced here
+            {"role": "user",   "content": user_content},
+        ],
         "stream": True,
         "keep_alive": "30m",
-        "options": BASE_OPTS,
+        "options": {
+            "temperature": 0.15,
+            "top_p": 0.9,
+            "repeat_penalty": 1.05,
+            "num_ctx": 2048,
+            "num_predict": 800,
+        },
     }
-    chunks: List[str] = []
+    chunks: list[str] = []
     with requests.post(OLLAMA_API_URL, json=payload, timeout=300, stream=True) as r:
         r.raise_for_status()
         for line in r.iter_lines(decode_unicode=True):
@@ -359,175 +319,12 @@ def _ollama_stream(prompt_text: str) -> str:
     return "".join(chunks).strip()
 
 def _call_twice(prompt_text: str, language: str) -> str:
-    lang_hint = (
-        "Rédige en **français**. Titres et puces en FR. Style concis, analytique."
-        if _is_fr(language)
-        else "Write in **English**. Use English headings and bullets. Keep it concise and analytical."
-    )
-    prefixed = f"{lang_hint}\n\n{prompt_text}"
     try:
-        return _ollama_stream(prefixed)
+        return _ollama_stream(prompt_text, language)   # <-- pass language from outer scope
     except ReadTimeout:
-        return _ollama_stream(prefixed)
+        return _ollama_stream(prompt_text, language)
 
 
-# -----------------------------
-# Compare workflow (LLM)
-# -----------------------------
-def _compare_llm_workflow(
-    A_name: str, B_name: str,
-    language: str,
-    role_label: str,
-    style_label: str,
-    style_influence: float,
-    scout_md_A: str, scout_md_B: str,
-    trend_md_A: str, trend_md_B: str,
-    style_rows_md: str,
-    aligned_diff_md: str,
-    similarity_0_100: float,
-) -> str:
-    # Build glossary off BOTH scouting tables
-    present_metrics = []
-    for md in (scout_md_A + "\n" + scout_md_B).splitlines():
-        if md.startswith("|") and not md.startswith("|---"):
-            parts = [p.strip() for p in md.strip("|").split("|")]
-            if parts:
-                present_metrics.append(parts[0])
-    glossary_block = _glossary_block_for(language, list(dict.fromkeys(present_metrics)))
-
-    # 1) Executive verdict
-    prompt1 = f"""
-You are an elite tactical football analyst advising a top European club.
-
-# TASK
-Pick the better signing between **{A_name}** and **{B_name}** for the **{role_label}** role
-{"with the team style: **"+style_label+"**" if style_label != "—" else "(no fixed team style)"}.
-Give a weighted score (/100) and confidence (1–5). Use only the data provided.
-
-# DECISION RULES
-- Role Fit & Current Level (35) — compare the percentiles relevant to **{role_label}**.
-- Immediate Impact (20) — average of top-3 role-critical percentiles per player.
-- Development Upside (15) — from seasonal trend lists (improving > consistent > declining).
-- Risk Profile (20) — penalize role-critical weaknesses (<25p), multi-metric decline, and availability flags (in trends).
-- Style Fit (10) — use style comparison rows; style influence = {style_influence:.2f}.
-
-Tie-breakers: higher similarity (profile match) may favor like-for-like replacement; else choose better style fit.
-
-# OUTPUT (Markdown, 2 lines)
-**Pick — NAME (Total/100, Confidence X/5)**
-Short one-sentence rationale (role fit + impact + risk + style).
-
-# DATA
-## Role & Style
-- Target role: {role_label}
-- Team style: {style_label} (influence {style_influence:.2f})
-- Similarity (profiles): {similarity_0_100:.1f}/100
-
-## Style head-to-head (summary)
-{style_rows_md}
-
-## Scouting Percentiles — {A_name}
-{scout_md_A}
-
-## Scouting Percentiles — {B_name}
-{scout_md_B}
-
-## Seasonal Trends — {A_name}
-{trend_md_A}
-
-## Seasonal Trends — {B_name}
-{trend_md_B}
-
-{glossary_block}
-
-Only provide the output standalone.
-""".strip()
-
-    
-
-    # 2) Head-to-head Scouting (percentiles only)
-    prompt2 = f"""
-You are a tactical football analyst.
-
-# TASK
-Head-to-head scouting for **{role_label}** using only percentiles:
-- 🟢 Where **{A_name}** leads: 3–4 bullets (*Metric — Δp*: brief role-specific note, ≤ 14 words)
-- 🟠 Where **{B_name}** leads: 3–4 bullets (*Metric — Δp*: …)
-Order by **role importance**, then absolute gap Δp.
-
-# DATA
-## Aligned differences (Δp = {A_name} − {B_name}, role-weighted order)
-{aligned_diff_md}
-
-## Scouting — {A_name} (percentiles only)
-{scout_md_A}
-
-## Scouting — {B_name} (percentiles only)
-{scout_md_B}
-
-{glossary_block}
-
-Only provide the output standalone.
-""".strip()
-
-
-    # 3) Trend contrast
-    prompt3 = f"""
-You are a tactical football analyst.
-
-# TASK
-Contrast the last-two-seasons **trends**:
-- Who is trending up in role-critical areas? (2 bullets)
-- Who has red-flag declines or availability concerns? (2 bullets max)
-Use only the lists provided. No invented numbers.
-
-# DATA
-## Trends — {A_name}
-{trend_md_A}
-
-## Trends — {B_name}
-{trend_md_B}
-
-Only provide the output standalone.
-""".strip()
-
-    # trends_md = _call_twice(prompt3) ...
-
-    # 4) System Fit (scouting + role)
-    prompt4 = f"""
-You are a tactical football analyst.
-
-# TASK
-For each system — **4-3-3**, **4-4-2**, **3-5-2** — pick **{A_name}** or **{B_name}** (not both) for the **{role_label}** deployment.
-Give one line per system with a short “because” citing 1–2 key metrics (Metric — XXp). No seasonal stats.
-
-# DATA
-## Scouting — {A_name} (percentiles only)
-{scout_md_A}
-
-## Scouting — {B_name} (percentiles only)
-{scout_md_B}
-
-{glossary_block}
-
-Only provide the output standalone.
-""".strip()
-
-    exec_md      = _call_twice(prompt1, language) or (_t("insufficient data","donnée indisponible",language))
-    scout_h2h_md = _call_twice(prompt2, language) or (_t("insufficient data","donnée indisponible",language))
-    # trends_md  = _call_twice(prompt3, language) ...
-    system_fit_md= _call_twice(prompt4, language) or (_t("insufficient data","donnée indisponible",language))
-
-    title_exec = f"### 💼 Executive Verdict — {A_name} vs {B_name}" if not _is_fr(language) else f"### 💼 Verdict — {A_name} vs {B_name}"
-    title_h2h  = f"### 🧾 Head-to-Head Scouting — {A_name} vs {B_name}" if not _is_fr(language) else f"### 🧾 Analyse comparée — {A_name} vs {B_name}"
-    title_sys  = f"### ♟️ System Fit — {A_name} vs {B_name}" if not _is_fr(language) else f"### ♟️ Adaptation tactique — {A_name} vs {B_name}"
-
-    return (
-        "### 🧠 LLM Comparison\n\n"
-        f"{title_exec}\n\n{exec_md}\n\n---\n\n"
-        f"{title_h2h}\n\n{scout_h2h_md}\n\n---\n\n"
-        f"{title_sys}\n\n{system_fit_md}"
-    )
 
 # -----------------------------
 # Public API
@@ -583,19 +380,20 @@ def compare_players(
         styles = styles or list(PLAY_STYLE_PRESETS.keys())
         style_rows: List[str] = []
         best_style_label = "—"
-        best_margin = -1e9
+        best_abs_margin = -1.0  # any real edge will beat this
 
         for s in styles:
-            W = _style_reweight(W_role, s, style_influence, base=base, sub=sub)  # <<< pass base/sub
+            W = _style_reweight(W_role, s, style_influence, base=base, sub=sub)
             scoreA, scoreB, det = _head_to_head_score(A_p, B_p, W)
             edge = scoreA - scoreB
             s_label = PLAY_STYLE_PRETTY.get(s, s)
             winner = A_name if edge >= 0 else B_name
             row = f"| {s_label} | {scoreA:.1f} | {scoreB:.1f} | **{winner}** |"
             style_rows.append(row)
-            if abs(edge) > abs(best_margin):
-                best_margin = edge
+            if abs(edge) > best_abs_margin:
+                best_abs_margin = abs(edge)
                 best_style_label = s_label
+
 
         # 6) Build aligned differences table (role-weighted ordering)
         W_default = _style_reweight(W_role, None, 0.0)  # pure role for ordering
@@ -622,7 +420,8 @@ def compare_players(
         scout_pct_B = pd.DataFrame({"Percentile": B_p}).to_markdown(tablefmt="pipe", index=True)
 
         # 8) Style head-to-head mini-table (rows)
-        style_header = f"| Style | {A_name} (p/100) | {B_name} (p/100) | Winner |"
+        style_header = f"| {_t('Style','Style',language)} | {A_name} (p/100) | {B_name} (p/100) | {_t('Winner','Vainqueur',language)} |"
+        style_section_title = _t("#### Style head-to-head (summary)", "#### Duel de styles (résumé)", language)
         style_sep    = "|---|---:|---:|---|"
         style_rows_md = "\n".join([style_header, style_sep] + style_rows)
 
@@ -642,32 +441,43 @@ def compare_players(
 {style_line}  
 {sim_line}
 
-#### Style head-to-head (summary)
+{style_section_title}
 {style_rows_md}
 
-#### Key role-critical differences (top 12 by role weight × gap)
+#### {_t('Key role-critical differences (top 12 by role weight × gap)','Différences clés (top 12 par poids × écart)', language)}
 {aligned_diff_md}
 """
 
+        # Build glossary here (keeps utils module pure)
+        present_metrics = []
+        for md in (scout_pct_A + "\n" + scout_pct_B).splitlines():
+            if md.startswith("|") and not md.startswith("|---"):
+                parts = [p.strip() for p in md.strip("|").split("|")]
+                if parts:
+                    present_metrics.append(parts[0])
+        glossary_block = _glossary_block_for(language, list(dict.fromkeys(present_metrics)))
+
+        # Respect Fast Preview
         if skip_llm:
-            # Deterministic-only view
+            deterministic_md += "\n\n> ⚡ **Fast preview:** LLM analysis skipped."
             return deterministic_md
 
-        # 11) LLM comparison workflow (4 short prompts)
-        trend_md_A = A["trend_block_md"]
-        trend_md_B = B["trend_block_md"]
-        compare_llm_md = _compare_llm_workflow(
+        # LLM comparison (inject call function + glossary)
+        compare_llm_md = compare_llm_workflow(
             A_name=A_name, B_name=B_name,
             language=language,
             role_label=role_label,
             style_label=best_style_label,
             style_influence=style_influence,
             scout_md_A=scout_pct_A, scout_md_B=scout_pct_B,
-            trend_md_A=trend_md_A, trend_md_B=trend_md_B,
+            trend_md_A=A["trend_block_md"], trend_md_B=B["trend_block_md"],
             style_rows_md=style_rows_md,
             aligned_diff_md=aligned_diff_md,
             similarity_0_100=similarity,
+            glossary_block=glossary_block,
+            call_fn=_call_twice,     # <- inject your function that wraps system-lang + retry
         )
+        return deterministic_md + "\n\n---\n\n" + compare_llm_md
 
         return deterministic_md + "\n\n---\n\n" + compare_llm_md
 

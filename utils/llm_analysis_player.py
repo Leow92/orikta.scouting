@@ -7,25 +7,16 @@ from typing import Iterable
 import pandas as pd
 import requests
 from requests.exceptions import ReadTimeout
+from utils.lang import _is_fr, _lang_block
 
 OLLAMA_API_URL = "http://localhost:11434/api/chat"
 
 # ----------------------------- #
 # Language utils & presentation #
 # ----------------------------- #
-
-def _is_fr(language: str | None) -> bool:
-    return (language or "").strip().lower().startswith("fr")
-
 def report_header() -> str:
     return f"Report generated on {datetime.now().strftime('%Y-%m-%d %H:%M')}"
 
-def _lang_block(language: str | None) -> str:
-    if _is_fr(language):
-        return ("Rédige en **français**. Utilise des titres et puces clairs. "
-                "Si une donnée est manquante, écris « donnée indisponible ».")
-    return ("Write in **English**. Use clear headings and bullet points. "
-            "If a data point is missing, write 'insufficient data'.")
 
 # ----------------------------- #
 # Glossary                      #
@@ -231,13 +222,22 @@ def analyze_single_player_workflow(
             "num_predict": 800,
         }
 
-        def _ollama_stream(user_content: str) -> str:
+        def _ollama_stream(user_content: str, language: str) -> str:
             payload = {
                 "model": "gemma3",
-                "messages": [{"role": "user", "content": user_content}],
+                "messages": [
+                    {"role": "system", "content": _lang_block(language)},   # <-- language enforced here
+                    {"role": "user",   "content": user_content},
+                ],
                 "stream": True,
                 "keep_alive": "30m",
-                "options": base_payload_opts,
+                "options": {
+                    "temperature": 0.15,
+                    "top_p": 0.9,
+                    "repeat_penalty": 1.05,
+                    "num_ctx": 2048,
+                    "num_predict": 800,
+                },
             }
             chunks: list[str] = []
             with requests.post(OLLAMA_API_URL, json=payload, timeout=300, stream=True) as r:
@@ -259,17 +259,11 @@ def analyze_single_player_workflow(
             return "".join(chunks).strip()
 
         def _call_twice(prompt_text: str) -> str:
-            # ➊ Tiny language directive (EN/FR) prepended to every prompt
-            lang_hint = (
-                "Rédige en **français**. Titres et puces en FR. Style concis, analytique."
-                if _is_fr(language)
-                else "Write in **English**. Use English headings and bullets. Keep it concise and analytical."
-            )
-            prefixed = f"{lang_hint}\n\n{prompt_text}"
             try:
-                return _ollama_stream(prefixed)
+                return _ollama_stream(prompt_text, language)   # <-- pass language from outer scope
             except ReadTimeout:
-                return _ollama_stream(prefixed)
+                return _ollama_stream(prompt_text, language)
+
 
 
         # ---------- Prompt 1: Investment Verdict ----------
