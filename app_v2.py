@@ -11,13 +11,50 @@ from tools.grading_v3 import PLAY_STYLE_PRESETS, PLAY_STYLE_PRETTY
 st.set_page_config(page_title="onix.scouting — Single Player", page_icon="🪨", layout="wide")
 st.markdown("""
 <style>
+:root{
+  --onix-fg:#111;            /* text */
+  --onix-bg:#ffffff;         /* page bg */
+  --onix-th-bg:#f3f4f6;      /* header bg (light gray) */
+  --onix-border:#e5e7eb;     /* borders */
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --onix-fg:#e5e7eb;
+    --onix-bg:#0b0f19;
+    --onix-th-bg:#1f2937;    /* darker header bg */
+    --onix-border:#374151;
+  }
+}
+
+/* page padding */
 .block-container { padding-top: 1rem; padding-bottom: 2rem; }
-table { width: 100%; border-collapse: collapse; }
-th, td { border: 1px solid #e5e7eb; padding: 6px; }
-th { background: #f8fafc; }
-hr { border: none; border-top: 1px solid #e5e7eb; margin: 24px 0; }
-.small { color:#6b7280; font-size: 0.9rem; }
-.kbd { padding: 2px 6px; border-radius: 4px; border:1px solid #d1d5db; }
+
+/* force table styles inside Markdown blocks */
+div[data-testid="stMarkdown"] table{
+  width:100%;
+  border-collapse:collapse;
+  background:var(--onix-bg) !important;
+  color:var(--onix-fg) !important;
+}
+div[data-testid="stMarkdown"] table th,
+div[data-testid="stMarkdown"] table td{
+  border:1px solid var(--onix-border) !important;
+  padding:6px;
+  color:var(--onix-fg) !important;
+}
+div[data-testid="stMarkdown"] table thead th{
+  background:var(--onix-th-bg) !important;
+  font-weight:600;
+}
+
+/* generic hr + small text */
+hr{ border:none; border-top:1px solid var(--onix-border); margin:24px 0; }
+.small{ color:#6b7280; font-size:0.9rem; }
+
+/* keep code readable in both themes */
+code, pre{
+  color:var(--onix-fg) !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -54,7 +91,7 @@ if clear_hist:
 
 # -------- Header --------
 st.markdown("# 🪨 onix.scouting")
-st.caption("Tactical scouting, powered by your local stack.")
+st.caption("Tactical scouting tool.")
 
 # -------- Session State init --------
 st.session_state.setdefault("history", [])
@@ -63,11 +100,11 @@ st.session_state.setdefault("selected_history_index", 0)
 
 # -------- Input form (no accidental re-runs) --------
 with st.form(key="query_form", clear_on_submit=False):
-    user_input = st.text_input("💬 Ask your question (e.g., `Analyze Cherki` or `Compare Mbappé vs Salah`)",
+    user_input = st.text_input("💬 Ask your question (e.g., `Analyze: Cherki` or `Compare: Mbappé vs Salah`)",
                                value="", placeholder="e.g. Analyze Player: Rayan Cherki")
     col_a, col_b = st.columns([1, 1])
     with col_a:
-        examples = st.selectbox("Examples", ["", "Analyze: Rayan Cherki", "Analyze: Kevin De Bruyne", "Compare: Mbappé vs Salah"])
+        examples = st.selectbox("Examples", ["", "Analyze: Cherki", "Analyze: Yamal", "Compare: Mbappé vs Salah"])
     with col_b:
         fill = st.form_submit_button("Use example")
         if fill and examples:

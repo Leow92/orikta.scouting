@@ -389,8 +389,8 @@ def _merge_profile_items(profile: dict) -> list[dict]:
     return merged
 
 def _profile_table_md(full_name: str, items: list[dict], language: str) -> str:
-    title = _t(f"### 👤 {full_name} Presentation",
-               f"### 👤 Présentation de {full_name}",
+    title = _t(f"### 👤 Player Presentation",
+               f"### 👤 Présentation du Joueur",
                language)
 
     if not items:
