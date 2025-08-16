@@ -5,10 +5,8 @@ def _is_fr(language: str | None) -> bool:
 
 def _lang_block(language: str | None) -> str:
     if _is_fr(language):
-        return ("Rédige en **français**. Utilise des titres et puces clairs. "
-                "Si une donnée est manquante, écris « donnée indisponible ».")
-    return ("Write in **English**. Use clear headings and bullet points. "
-            "If a data point is missing, write 'insufficient data'.")
+        return ("Only provide the output standalone. Write your answer in **French**")
+    return ("Only provide the output standalone.")
 
 def _glossary_block_for(language: str, present_metrics: List[str]) -> str:
     # Minimal glossary like in utils/llm_analysis_player.py

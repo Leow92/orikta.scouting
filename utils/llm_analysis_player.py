@@ -340,7 +340,6 @@ DATA
 ## Presentation of the Player
 {presentation_md}
 
-Only provide the output standalone.
 {_lang_block(language)}
 """.strip()
         
@@ -394,7 +393,6 @@ DATA
 ## Presentation of the Player
 {presentation_md}
 
-Only provide the output standalone.
 {_lang_block(language)}
 """.strip()
 
@@ -452,8 +450,7 @@ Now generate the scouting synthesis based on:
 
 {{presentation_player}}:
 {presentation_md}
-
-Only provide the output standalone. 
+ 
 {_lang_block(language)}
 """
         
