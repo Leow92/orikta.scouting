@@ -324,8 +324,6 @@ def _call_twice(prompt_text: str, language: str) -> str:
     except ReadTimeout:
         return _ollama_stream(prompt_text, language)
 
-
-
 # -----------------------------
 # Public API
 # -----------------------------
@@ -395,25 +393,43 @@ def compare_players(
                 best_style_label = s_label
 
 
-        # 6) Build aligned differences table (role-weighted ordering)
+        # 6) Build per-metric winner table (role-weighted ordering)
         W_default = _style_reweight(W_role, None, 0.0)  # pure role for ordering
+        EPS = 0.5  # treat small gaps as ties
         details = []
         for m in common_idx:
             w = float(W_default.get(m, 0.0))
-            a = float(A_p[m]); b = float(B_p[m])
+            a_raw = float(A_p[m]); b_raw = float(B_p[m])
+
+            # Compare desirability (invert negatives)
+            a = _invert_if_negative(m, a_raw)
+            b = _invert_if_negative(m, b_raw)
             dp = a - b
             impact = abs(w * dp)
-            details.append((m, w, a, b, dp, impact))
-        det_df = pd.DataFrame(details, columns=["Metric","w","A_pct","B_pct","Δp","impact"]).sort_values(
-            ["w","impact"], ascending=[False, False]
-        )
 
-        # Use player names in the markdown header
-        diff_rows = [f"| Metric | w | {A_name} (p) | {B_name} (p) | Δp ({A_name}−{B_name}) |",
-                    "|---|---:|---:|---:|---:|"]
+            # Winner label (tie if nearly equal)
+            winner = (
+                A_name if dp > EPS else
+                (B_name if dp < -EPS else _t("Tie", "Égalité", language))
+            )
+
+            # Keep raw displayed percentiles (so user sees actual FBref values)
+            details.append((m, w, a_raw, b_raw, winner, impact))
+
+        det_df = pd.DataFrame(
+            details, columns=["Metric", "w", "A_pct", "B_pct", "Winner", "impact"]
+        ).sort_values(["w", "impact"], ascending=[False, False])
+
+        # Markdown (Winner column instead of Δp)
+        winners_rows = [
+            f"| Metric | w | {A_name} (p) | {B_name} (p) | {_t('Winner','Vainqueur',language)} |",
+            "|---|---:|---:|---:|---|",
+        ]
         for _, r in det_df.head(12).iterrows():
-            diff_rows.append(f"| {r['Metric']} | {r['w']:.2f} | {r['A_pct']:.0f} | {r['B_pct']:.0f} | {r['Δp']:.0f} |")
-        aligned_diff_md = "\n".join(diff_rows)
+            winners_rows.append(
+                f"| {r['Metric']} | {r['w']:.2f} | {r['A_pct']:.0f} | {r['B_pct']:.0f} | {r['Winner']} |"
+            )
+        aligned_diff_md = "\n".join(winners_rows)
 
         # 7) Percentiles-only tables for LLM (each)
         scout_pct_A = pd.DataFrame({"Percentile": A_p}).to_markdown(tablefmt="pipe", index=True)
