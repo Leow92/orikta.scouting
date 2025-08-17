@@ -23,7 +23,6 @@ from utils.lang import _is_fr
 # ------------------------- #
 # Config & small utilities  #
 # ------------------------- #
-
 VERBOSE = False  # set True for console diagnostics
 
 def _log(msg: str) -> None:
@@ -45,7 +44,6 @@ def _nodata(language: str) -> str:
 # ------------------------------------- #
 # FBref Standard Stats helpers (robust) #
 # ------------------------------------- #
-
 CANON_STANDARD_HEADERS = [
     "Season","Age","Squad","Country","Comp","LgRank",
     "MP","Starts","Min","90s",
@@ -322,7 +320,6 @@ def build_trend_block_for_llm(std_df_raw: pd.DataFrame, language: str) -> tuple[
 # ------------------------- #
 # Profile helpers           #
 # ------------------------- #
-
 def _pretty_style_name(key: str) -> str:
     return PLAY_STYLE_PRETTY.get(key, key)
 
@@ -414,226 +411,6 @@ def _profile_table_md(full_name: str, items: list[dict], language: str) -> str:
 # ------------------------- #
 # Main entry                #
 # ------------------------- #
-
-def analyze_player_v0(players: list[str], language: str = "English") -> str:
-    """
-    Single-player pipeline:
-      - Resolve URL
-      - Scrape profile + tables
-      - Build presentation + scout table + last-two-seasons block
-      - Deterministic grades (single + multi-position)
-      - LLM analysis (light)
-    Returns a full markdown report.
-    """
-    if not isinstance(players, list) or len(players) != 1:
-        return "⚠️ Please provide exactly one player to analyze."
-
-    query_name = players[0]
-    _log(f"🧪 Analyze request for: {query_name}")
-
-    url = search_fbref_url_with_playwright(query_name)
-    if not url:
-        return f"❌ Could not resolve FBref page for: {query_name}"
-
-    full_name = query_name.title()
-    _log(f"✅ Using URL for {full_name}: {url}")
-
-    try:
-        # 1) Profile + positions
-        profile = scrape_player_profile(url)  # {"name","attributes","paragraphs","position_hint"}
-        if profile.get("name"):
-            full_name = profile["name"]
-
-        pos_raw = None
-        for a in profile.get("attributes", []):
-            if str(a.get("label", "")).lower().startswith("position"):
-                pos_raw = a.get("value")
-                break
-        positions = normalize_positions_from_profile(pos_raw)  # list of (base, sub|None)
-        if not positions:
-            if ":" in grade_bd.role:
-                base, sub = grade_bd.role.split(":", 1)
-                positions = [(base, sub)]
-            else:
-                positions = [(grade_bd.role, None)]
-        items = _merge_profile_items(profile)
-        presentation_md = _profile_table_md(full_name, items, language)
-
-        # 2) Tables
-        tables = scrape_all_tables(url)
-
-        # 2a) Scouting table (primary)
-        scout_key = next((k for k in tables.keys() if k.startswith("scout_summary")), None)
-        if not scout_key:
-            return f"{presentation_md}\n⚠️ {_t('Could not find a scouting table for', 'Tableau scouting introuvable pour', language)} {full_name}."
-
-        _log(f"📄 Using scouting table: {scout_key} for {full_name}")
-        scout_df = tables[scout_key]
-        if scout_df.shape[1] < 3:
-            return f"{presentation_md}\n⚠️ {_t('Scouting table has an unexpected format for', 'Format inattendu du tableau scouting pour', language)} {full_name}."
-
-        # Normalize columns to ["Metric","Per90","Percentile"]
-        norm_cols = ["Metric", "Per90", "Percentile"]
-        scout_df = scout_df.copy()
-        scout_df.columns = norm_cols[: len(scout_df.columns)]
-        scout_df.set_index("Metric", inplace=True)
-
-        # Keep only Per90 + Percentile, numeric where possible
-        display_df = scout_df[["Per90", "Percentile"]].copy()
-        for col in ["Per90", "Percentile"]:
-            display_df[col] = _to_numeric_safely(display_df[col])
-
-        # Drop empty metric rows
-        def _row_is_empty(s: pd.Series) -> bool:
-            return (str(s.name).strip() == "") or s.isna().all() or (s.astype(str).str.strip() == "").all()
-
-        display_df = display_df[~display_df.apply(_row_is_empty, axis=1)]
-
-        scout_md = display_df.to_markdown(tablefmt="pipe", index=True)
-
-        # 2b) Standard Stats: last two seasons block
-        standard_keys = [k for k in tables.keys() if k.startswith("stats_standard")]
-        std2_md = _nodata(language)
-        std_df_raw = None
-        if standard_keys:
-            chosen = _prefer_stats_standard_key(standard_keys)
-            std_df_raw = tables.get(chosen)
-            if isinstance(std_df_raw, pd.DataFrame) and not std_df_raw.empty:
-                std2_md = _last_two_seasons_md(std_df_raw, language)
-
-        # NEW: compute trends programmatically (number-free lists)
-        trend_block_md, trend_debug = build_trend_block_for_llm(std_df_raw, language) if std_df_raw is not None else (_nodata(language), {})
-
-        # 2c) Deterministic grade (best-guess role)
-        role_hint = profile.get("position_hint") or scout_key
-        grade_bd = compute_grade(scout_df, role_hint=role_hint)
-        grade_md = rationale_from_breakdown(grade_bd, language=language)  # kept if you later want to display it
-
-        # 2d) Multi-position grades
-        per_pos = compute_grade_for_positions(scout_df, positions)
-        per_pos_sorted = dict(sorted(per_pos.items(), key=lambda kv: kv[1].final_score, reverse=True))
-
-        multi_title = _t("### 🧮 Multi-position Grades /100", "### 🧮 Notes par poste /100", language)
-        rows = ["| Position | Score/100 | Top drivers | Missing |", "|---|---:|---|---|"]
-        for role_key, bd in per_pos_sorted.items():
-            top2 = sorted(bd.matched, key=lambda x: x[2], reverse=True)[:2]
-            top_str = ", ".join(f"{m} (w={w:.2f})" for m, w, _ in top2) if top2 else "—"
-            miss_str = ", ".join(bd.missing[:3]) if bd.missing else "—"
-            if ":" in role_key:
-                base, sub = role_key.split(":", 1)
-                pretty = label_from_pair(base, sub)
-            else:
-                pretty = label_from_pair(role_key, None)
-            rows.append(f"| {pretty} | **{bd.final_score:.1f}** | {top_str} | {miss_str} |")
-        multi_md = multi_title + "\n" + "\n".join(rows) + "\n"
-
-        # === Style Fit Matrix (roles × team play styles) ===
-        # === Style Fit Matrix (roles × team play styles) ===
-        styles = list(PLAY_STYLE_PRESETS.keys())
-        style_strength = 0.6
-
-        # Compute matrix (rows = pretty role labels, cols = pretty style labels)
-        style_df, roles_pretty, styles_pretty = _build_style_matrix(
-            scout_df, positions, styles, style_strength=style_strength
-        )
-
-        # Title
-        style_title = _t("### 🎛️ Style Fit Matrix — Roles × Team Play Styles",
-                        "### 🎛️ Adéquation au style — Postes × Styles d’équipe",
-                        language)
-
-        # Escape any '|' in labels (just in case)
-        cols = [str(c).replace("|", "\\|") for c in style_df.columns]
-        rows_idx = [str(r).replace("|", "\\|") for r in style_df.index]
-
-        # Header and separator (first col left, numeric cols right)
-        header = "| Role \\ Style | " + " | ".join(cols) + " |"
-        sep_cells = ["---"] + ["---:"] * len(cols)
-        sep = "|" + "|".join(sep_cells) + "|"
-
-        # Safe maxima (skip all-NaN)
-        _valid = style_df.copy()
-        valid_cols = _valid.columns[~_valid.isna().all(axis=0)]
-        valid_rows = _valid.index[~_valid.isna().all(axis=1)]
-        if len(valid_cols) and len(valid_rows):
-            row_max = _valid.loc[valid_rows, valid_cols].idxmax(axis=1)
-            col_max = _valid.loc[valid_rows, valid_cols].idxmax(axis=0)
-        else:
-            row_max = pd.Series(index=_valid.index, dtype=object)
-            col_max = pd.Series(index=_valid.columns, dtype=object)
-
-        lines = [header, sep]
-        for r_label_raw in style_df.index:
-            r_label = str(r_label_raw).replace("|", "\\|")   # NEW: escape
-            cells = []
-            for c_label in style_df.columns:
-                v = style_df.loc[r_label_raw, c_label]
-                if pd.isna(v):
-                    cells.append("—")
-                    continue
-                is_row_best = (r_label in row_max.index) and (row_max.get(r_label) == c_label)
-                is_col_best = (c_label in col_max.index) and (col_max.get(c_label) == r_label)
-                txt = f"{float(v):.1f}"
-                cells.append(f"**{txt}**" if (is_row_best or is_col_best) else txt)
-            lines.append(f"| {r_label} | " + " | ".join(cells) + " |")
-
-        style_note = _t(
-            "_Bold = best style per role and best role per style. Scores are /100. Adjusted with style_strength._",
-            "_Gras = meilleur style par poste et meilleur poste par style. Scores sur 100. Pondérés par style_strength._",
-            language,
-        )
-
-        style_md = style_title + "\n" + "\n".join(lines) + "\n\n" + style_note + "\n"
-
-
-        # 2e) Scouting section title
-        ctxt = scout_key.replace("scout_summary_", "").upper()
-        scout_title = _t(f"### 🧾 Scouting Report ({ctxt})",
-                         f"### 🧾 Rapport de scouting ({ctxt})",
-                         language)
-
-        # 3) LLM analysis (light) — pass compact grade context
-        top_roles_for_llm = [
-            (label_from_pair(*(rk.split(":") if ":" in rk else (rk, None))), round(bd.final_score, 1))
-            for rk, bd in list(per_pos_sorted.items())[:3]
-        ]
-        grade_ctx = {
-            "role": grade_bd.role,
-            "score": round(grade_bd.final_score, 1),
-            "drivers": sorted(grade_bd.matched, key=lambda x: x[2], reverse=True)[:5],
-            "missing": grade_bd.missing[:5],
-            "per_position_top": top_roles_for_llm,
-        }
-
-        llm_text_light = analyze_single_player_workflow(
-            full_name,
-            scout_df,
-            language=language,
-            grade_ctx=grade_ctx,
-            multi_style_md=style_md,
-            trend_block_md=trend_block_md,
-        )
-
-        print("✅ Report Generation Done.")
-
-        return _md(f"""
-{presentation_md}
-{SEPARATOR}
-{scout_title}
-{scout_md}
-{SEPARATOR}
-{multi_md}
-{SEPARATOR}
-{style_md}
-{SEPARATOR}
-{std2_md}
-{SEPARATOR}
-{llm_text_light}
-""")
-
-    except Exception as e:
-        return f"⚠️ Error analyzing {full_name}: {e}"
-
 def analyze_player(
     players: list[str],
     language: str = "English",

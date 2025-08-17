@@ -20,7 +20,6 @@ def report_header() -> str:
 # ----------------------------- #
 # Glossary                      #
 # ----------------------------- #
-
 SCOUT_METRIC_GLOSSARY_EN = {
     "Non-Penalty Goals": "Goals scored excluding penalties",
     "npxG": "Expected goals, non-penalty",
@@ -64,7 +63,6 @@ def _glossary(language: str | None) -> dict[str, str]:
 # ----------------------------- #
 # Role hints & guides           #
 # ----------------------------- #
-
 ROLE_HINTS = {
     "gk": [
         "Save", "PSxG", "Crosses Stopped", "GA/90", "Launch%", "Avg Distance of Def Actions",
@@ -96,7 +94,6 @@ ROLE_CODE_MAP = {"fw": "FW", "mf": "MF", "df": "DF", "gk": "GK"}
 # ----------------------------- #
 # Signal processing             #
 # ----------------------------- #
-
 def _infer_role_from_metrics(index_names: Iterable[str]) -> tuple[str, float]:
     """
     Heuristic (count substring hits) -> (role, confidence 0..1).
@@ -131,7 +128,6 @@ def _rank_signals(scout_df: pd.DataFrame, top_n: int = 8) -> tuple[list[tuple[st
 # ----------------------------- #
 # Formatting helpers            #
 # ----------------------------- #
-
 def _fmt_pairs(pairs: list[tuple[str, float]]) -> str:
     return "\n".join(f"- {m} — {int(p)}p" for m, p in pairs) if pairs else "- —"
 
@@ -150,7 +146,6 @@ def _fmt_drivers(drivers: list[tuple[str, float, float]] | None, max_n: int = 5)
 # ----------------------------- #
 # Main entry                    #
 # ----------------------------- #
-
 def analyze_single_player_workflow(
     player: str,
     scout_df: pd.DataFrame,
