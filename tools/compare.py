@@ -35,7 +35,6 @@ BASE_OPTS = {
     "num_predict": 800,
 }
 
-
 # -----------------------------
 # Deterministic helpers
 # -----------------------------
@@ -78,7 +77,6 @@ def _style_reweight(
 
     tot = sum(out.values()) or 1.0
     return {k: v / tot for k, v in out.items()}
-
 
 def _map_index_aliases(idx: List[str]) -> Dict[str, str]:
     """Return mapping canonical_key(lower) -> actual index name in df, using ALIASES and exact/lower matches."""
@@ -391,7 +389,6 @@ def compare_players(
             if abs(edge) > best_abs_margin:
                 best_abs_margin = abs(edge)
                 best_style_label = s_label
-
 
         # 6) Build per-metric winner table (role-weighted ordering)
         W_default = _style_reweight(W_role, None, 0.0)  # pure role for ordering
