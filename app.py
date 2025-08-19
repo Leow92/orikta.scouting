@@ -23,7 +23,7 @@ UI_STRINGS = {
         "sidebar_history": "🕓 Prompt History",
         "sidebar_history_empty": "No history yet.",
         "input_label": "💬 Ask your question",
-        "input_placeholder": "e.g. Analyze: Rayan Cherki  •  Compare: CJ Egan-Riley vs Joel Ordoñez",
+        "input_placeholder": "e.g. Analyze: Cherki • Compare: Mbappe vs Lamineyamal",
         "generate": "Generate",
         "spinner": "🔎 Building report…",
         "result_title": "🧠 Result",
@@ -46,7 +46,7 @@ UI_STRINGS = {
         "sidebar_history": "🕓 Historique des requêtes",
         "sidebar_history_empty": "Aucun historique.",
         "input_label": "💬 Saisissez votre requête",
-        "input_placeholder": "ex. Analyser : Rayan Cherki  •  Comparer : CJ Egan-Riley vs Joel Ordoñez",
+        "input_placeholder": "ex. Analyser : Cherki • Comparer : Mbappe vs Lamineyamal",
         "generate": "Générer",
         "spinner": "🔎 Génération du rapport…",
         "result_title": "🧠 Résultat",
@@ -157,12 +157,11 @@ st.session_state.setdefault("selected_history_index", 0)
 # -------- Input form (single chat bar + Generate) --------
 with st.form(key="query_form", clear_on_submit=False):
     user_input = st.text_input(
-        "Prompt",                               # <= non-empty
+        _t("input_label"),                 # localized, non-empty label (kept collapsed)
         key="input",
-        placeholder="e.g. Analyze: Rayan Cherki",
-        label_visibility="collapsed",           # <= hide label
+        placeholder=_t("input_placeholder"),  # <- localized placeholder
+        label_visibility="collapsed",
     )
-
     submitted = st.form_submit_button(_t("generate"), type="primary", use_container_width=True)
 
 # -------- Run pipeline on submit --------
