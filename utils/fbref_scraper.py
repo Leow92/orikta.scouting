@@ -9,7 +9,7 @@ from typing import List, Dict, Any
 def fetch_rendered_html(url: str, wait_time: float = 3.5) -> str:
     """Uses Playwright to fetch fully rendered HTML."""
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.firefox.launch(headless=True)
         page = browser.new_page()
         page.goto(url)
         time.sleep(wait_time)  # Let JS finish loading
