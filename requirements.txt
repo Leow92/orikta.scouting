@@ -1,6 +1,14 @@
-beautifulsoup4
-pandas
-playwright
-Requests
-streamlit
-ollama
+# Core app
+streamlit==1.37.1
+pandas==2.2.2
+numpy==1.26.4
+requests==2.32.3
+markdown==3.6
+
+# HTML parsing for scraping (pandas.read_html + your scraper)
+beautifulsoup4==4.12.3
+html5lib==1.1
+lxml==5.2.2
+
+# Browser automation for FBref URL resolving
+playwright==1.46.0

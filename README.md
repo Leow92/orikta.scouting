@@ -1,4 +1,4 @@
-# onix.scouting — README
+# orikta.scouting (onix.scouting)
 
 A local, privacy-first football scouting app built with Streamlit. It scrapes FBref player pages, computes deterministic grades and style fits, and (optionally) asks a local LLM (via Ollama) to produce concise scouting notes — in English or French.
 
@@ -6,7 +6,7 @@ A local, privacy-first football scouting app built with Streamlit. It scrapes FB
 
 * Analyze a single player or compare two players.
 * Deterministic scores: role fit, head-to-head, profile similarity, style fit matrix.
-* **Fast preview**: skip LLM for instant, deterministic output.
+* **Fast preview**: skip LLM for instant, deterministic output with grading tool.
 * Bilingual UI/LLM: English / Français.
 * Local LLM via **Ollama** (`gemma3` by default).
 
@@ -20,18 +20,17 @@ A local, privacy-first football scouting app built with Streamlit. It scrapes FB
 
 ```bash
 # 1) Clone & enter
-git clone <your-repo-url>
-cd onix.scouting
+git clone https://github.com/Leow92/orikta.scouting.git
+cd orikta.scouting
 
-# 2) Python deps
-python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
 # 3) Playwright browsers
 python -m playwright install
 
 # 4) Ollama (install separately)
-ollama pull gemma3
+Link to install Ollama: https://ollama.com/download/mac
+ollama pull gemma3 # google model used from ollama
 ollama serve  # keep running
 
 # 5) Run the app
@@ -52,8 +51,8 @@ streamlit run app.py
   * **Fast preview (skip LLM)**
 * **Prompt examples**
 
-  * Single: `Analyze: Rayan Cherki`
-  * Compare: `Compare: CJ Egan-Riley vs Joel Ordoñez`
+  * Single: `Analyze: Cherki`
+  * Compare: `Compare: Mbappe vs Mohamedsalah`
 * Download results as **Markdown** or **HTML**.
 
 ## Deterministic vs LLM
@@ -71,18 +70,10 @@ tools/analyze.py                # Single-player pipeline
 tools/compare.py                # Two-player pipeline
 tools/grading.py                # Role weights, grading, style presets
 utils/resolve_player_url.py     # FBref player search (Playwright)
+utils/prompt_parser.py          # Parse the user prompt to understand user need
+utils/lang.py                   # Handle language switch for LLM output
 utils/fbref_scraper.py          # HTML → DataFrames
 utils/llm_analysis_player.py    # Single-player LLM workflow
-utils/llm_analysis_comparison.py# (optional) comparison LLM workflow
+utils/llm_analysis_comparison.py# Comparison LLM workflow
 ui/branding.py                  # Footer/branding
 ```
-
-## Troubleshooting
-
-* **Streamlit label warning**: ensure labels are non-empty; hide with `label_visibility="collapsed"`.
-* **Dark theme text invisible**: don’t force `td` text color; CSS already respects theme.
-* **LLM outputs wrong language**: confirm `_lang_block(language)` is sent as a **system** message and the selected UI language is passed through.
-
-## License
-
-Add your preferred license (MIT/Apache-2.0/etc.).
