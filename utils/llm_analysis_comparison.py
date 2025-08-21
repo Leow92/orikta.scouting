@@ -134,6 +134,48 @@ Order by **role importance**, then absolute gap Δp.
 
 {_lang_block(language)}
 """.strip()
+    
+    prompt_scouting_2 = f"""
+<role> You are a **tactical football analyst** producing a role-specific head-to-head scouting summary. </role> <task> Your task is to compare **{A_name}** and **{B_name}** for the **{role_label}** role using only percentile-based scouting data. </task> <instructions> Create a structured bullet list highlighting where each player leads, with these constraints:
+
+🟢 Where {A_name} leads:
+
+List 3 to 4 bullets showing metrics where {A_name} outperforms {B_name}.
+
+🟠 Where {B_name} leads:
+
+List 3 to 4 bullets where {B_name} outperforms {A_name}.
+
+Bullet format (use exactly):
+* Metric — Δp: [brief role-relevant comment]
+
+Δp = {A_name} percentile − {B_name} percentile
+
+Keep each comment ≤14 words, role-specific, and tactically relevant.
+
+Ordering rules (apply separately for both players):
+
+Sort by role importance (higher-weighted metrics first).
+
+Then by absolute Δp (largest gaps first).
+
+Avoid redundancy and commentary — focus strictly on comparative metric insights.
+</instructions>
+
+<context> Use only the aligned percentile differences and scouting tables provided. Do not reference trends, availability, or style fit. </context> <output-format> Markdown format with exactly two bullet sections: - 🟢 Where {A_name} leads - 🟠 Where {B_name} leads Each section: 3–4 bullets only, as described. </output-format> <user-input> ## Aligned Metric Differences (Δp = {A_name} − {B_name}) {aligned_diff_md}
+Scouting — {A_name}
+
+{scout_md_A}
+
+Scouting — {B_name}
+
+{scout_md_B}
+
+{glossary_block}
+
+{_lang_block(language)}
+</user-input>
+"""
 
     # 3) System fit (percentiles only)
     prompt4 = f"""
@@ -154,14 +196,35 @@ Give one line per system with a short “because” citing 1–2 key metrics (Me
 
 {_lang_block(language)}
 """.strip()
+    
+    prompt_tactical_fit_2 = f"""
+<role> You are a **tactical football analyst** comparing player suitability across different formations. </role> <task> Your task is to determine whether **{A_name}** or **{B_name}** is a better fit for the **{role_label}** in each of the following systems: **4-3-3**, **4-4-2**, and **3-5-2**. </task> <instructions> For each formation: * Pick **only one** player — either {A_name} or {B_name}. * Justify the choice in **one sentence**. * Include **1–2 key metrics** in the format: `Metric — XXp` (percentile). * Do **not** reference seasonal trends, availability, or team style. * Focus strictly on **role-relevant percentile metrics** that influence system-specific performance.
+
+Format (repeat for each system):
+[System]: [Chosen Player] — [1-line rationale with 1–2 metrics]
+
+Example:
+4-3-3: {A_name} — Stronger ball progression (Progressive Passes — 88p) suits high-possession setups.
+</instructions>
+
+<context> Use only the percentile scouting tables provided below. Tailor each decision to how the role functions within that system’s tactical shape. </context> <output-format> Markdown: 3 lines total (one per system), each in the specified format. </output-format> <user-input> ## Scouting — {A_name} {scout_md_A}
+Scouting — {B_name}
+
+{scout_md_B}
+
+{glossary_block}
+
+{_lang_block(language)}
+</user-input>
+"""
 
     # Call the injected function (handles language + retry)
     def _fallback() -> str:
         return "donnée indisponible" if _is_fr(language) else "insufficient data"
 
     exec_md = call_fn(prompt_verdict_2, language) or _fallback()
-    scout_h2h_md = call_fn(prompt2, language) or _fallback()
-    system_fit_md = call_fn(prompt4, language) or _fallback()
+    scout_h2h_md = call_fn(prompt_scouting_2, language) or _fallback()
+    system_fit_md = call_fn(prompt_tactical_fit_2, language) or _fallback()
 
     # Titles localized here (no dependency on _t)
     if _is_fr(language):
