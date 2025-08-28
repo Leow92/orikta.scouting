@@ -258,8 +258,6 @@ def analyze_single_player_workflow(
             except ReadTimeout:
                 return _ollama_stream(prompt_text, language)
 
-
-
         # ---------- Prompt 1: Investment Verdict ----------
         prompt_verdict = f"""
 You are an elite tactical football analyst advising a top European club. Your club position itself on {player}. 
@@ -286,8 +284,8 @@ Confidence (1–5): start 3; +1 broad scouting coverage; +1 coherent complete tr
 # DATA
 ## Role & Grade
 {grade_role_str}
-{(f"- Top weighted drivers:\\n{drivers_md}" if grade_ctx else "").strip()}
-{(f"- Missing signals:\\n{missing_md}" if grade_ctx else "").strip()}
+{(f"- Top weighted drivers:\n{drivers_md}" if grade_ctx else "").strip()}
+{(f"- Missing signals:\n{missing_md}" if grade_ctx else "").strip()}
 
 ## Scouting Summary (last 365d)
 {scout_pct_only_md}
@@ -304,67 +302,32 @@ Only provide the output standalone.
         scout_pct_only = scout_df[["Percentile"]].copy()
         scout_pct_only_md = scout_pct_only.to_markdown(tablefmt="pipe", index=True)
 
-        # ---------- Prompt 2: Scouting Analysis (scouting only) ----------
-        prompt_scouting = f"""
-You are a tactical football analyst. You are analyzing the performance of {player} in the last 365 days.
-
-TASK
-Using only the scouting table, produce:
-- 🟢 Strengths — 3–4 bullets, **sorted by percentile DESC**.
-- 🔴 Weaknesses — 2–3 bullets, **sorted by role priority**, then lowest percentile first.
-- 🟡 Points to Improve — 2–3 actionable levers, **sorted by role priority**, then impact potential.
-
-Bullet format: *Metric — XXp*: short, role-specific note (≤ 18 words). Cite percentiles as XXp (rounded). No fabricated values.
-
-ROLE CONTEXT
-{grade_role_str}
-- Detected role: {role.upper()} (confidence {conf:.2f})
-- Role priorities: {_role_guide(role, language)}
-
-RANKED HELPERS (do not copy verbatim; for ordering only)
-- Top candidates:\n{top_signals_md}
-- Lowest candidates:\n{bottom_signals_md}
-
-DATA
-## Scouting Summary (last 365d)
-{scout_pct_only_md}
-
-## Scouting Metrics Glossary
-{glossary_block}
-
-## Presentation of the Player
-{presentation_md}
-
-{_lang_block(language)}
-""".strip()
-        
+        # ---------- Prompt 2: Scouting Analysis (scouting only) ---------- 
         prompt_scoutingv2 = f"""
 <role>  
 You are a tactical football analyst with expertise in player performance evaluation based on percentile-based scouting data.  
 </role>
 
 <task>  
-Your task is to analyze {player}’s performance over the last 365 days using percentile-based scouting data and role context.  
+Your task is to analyze {player}’s performance over the last 365 days using percentile-based scouting data and role, position context.  
 </task>
 
 <instructions>  
 Follow these steps:
-1. Extract and interpret percentile values from the scouting summary.
+1. Read and interpret percentile values from the scouting summary.
 2. Rank and categorize metrics into:
-   - 🟢 Strengths — 3–4 items, highest percentiles first.
+   - 🟢 Strengths — 3–4 items, ordered by *role priority**, then by *lowest percentile*.
    - 🔴 Weaknesses — 2–3 items, ordered by *role priority*, then by *lowest percentile*.
    - 🟡 Points to Improve — 2–3 actionable suggestions, ordered by *role priority* and *impact potential*.
 3. Write each bullet in this format:  
    `*Metric — XXp*: short, role-specific note (≤ 18 words)`
 
 **Important Rules:**
-
 * Use only the provided scouting table (`Scouting Summary`).
 * Do not fabricate any values or interpret beyond the given data.
 * Cite percentile values using “XXp” (rounded).
 * Prioritize relevance to the player's role using the `Role priorities` guide.
-
-  </instructions>
+</instructions>
 
 <context>  
 - Player: {player}  
@@ -376,29 +339,24 @@ Follow these steps:
   {bottom_signals_md}  
 </context>
 
-<examples>  
-**Bullet Example:**  
-`*Tackles — 91p*: Excellent at recovering possession in midfield, suits a pressing role.`  
-</examples>
+<output-format> 
+First, provide a quick explanation of what is a percentile and what it means.
 
-<output-format>  
-Organize output into three clear sections using the following headers:  
-```
+Then, organize output into three clear sections using the following headers:  
 🟢 Strengths  
+
 - ...  
 - ...  
 
-🔴 Weaknesses
+🔴 Weaknesses  
 
 * ...
 * ...
 
-🟡 Points to Improve
+🟡 Points to Improve  
 
 * ...
 * ...
-
-```
 </output-format>
 
 <user-input>  
@@ -442,35 +400,6 @@ Only provide the output standalone.
         #trends_md = _call_twice(prompt_trends) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
 
         # ---------- Prompt 4: Tactical Fit (scouting + role) ----------
-        prompt_tactical = f"""
-You are a tactical football analyst. You ara analyzing data from {player} to find best {player}'s best tactical fits.
-
-TASK
-Using the scouting table and role context (no seasonal stats), recommend for each system:
-- **4-3-3**, **4-4-2**, **3-5-2**: 2–3 best-fit positions, each with a one-line “because” citing 1–2 key metrics (XXp).
-Use only taxonomy positions (fw/mf/df/gk + subroles).
-
-ROLE CONTEXT
-{grade_role_str}
-- Detected role: {role.upper()} (confidence {conf:.2f})
-- Role priorities: {_role_guide(role, language)}
-
-DATA
-## Scouting Summary (last 365d)
-{scout_pct_only_md}
-
-## Multi Style Positions Table
-{multi_style_md}
-
-## Scouting Metrics Glossary
-{glossary_block}
-
-## Presentation of the Player
-{presentation_md}
-
-{_lang_block(language)}
-""".strip()
-        
         prompt_tacticalv2 = f"""
 <role>  
 You are a tactical football analyst with expertise in player profiling and formation fit analysis.  
@@ -493,7 +422,7 @@ For each of the following systems — **4-3-3**, **4-4-2**, and **3-5-2** — do
 * Ground all position fits in percentile data and role priorities.
 * Do **not fabricate** data or interpret outside the given metrics.
 
-  </instructions>
+</instructions>
 
 <context>  
 - Player: {player}  
@@ -510,23 +439,20 @@ For each of the following systems — **4-3-3**, **4-4-2**, and **3-5-2** — do
 </examples>
 
 <output-format>  
-Structure your answer like this:  
-```
+Structure your answer like this: 
 🔷 4-3-3  
 - [POSITION]: [Short reason with metric(s) — XXp]  
 - ...  
 
 🔷 4-4-2
 
-* \[POSITION]: \[Short reason with metric(s) — XXp]
+* [POSITION]: [Short reason with metric(s) — XXp]
 * ...
 
 🔷 3-5-2
 
-* \[POSITION]: \[Short reason with metric(s) — XXp]
+* [POSITION]: [Short reason with metric(s) — XXp]
 * ...
-
-```
 </output-format>
 
 <user-input>  
@@ -541,69 +467,14 @@ Structure your answer like this:
 
 ## Presentation of the Player  
 {presentation_md}
+</user-input>
 
 {_lang_block(language)}  
-</user-input>
 """.strip()
 
         scouting_md = _call_twice(prompt_scoutingv2) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
-        tactical_md = _call_twice(prompt_tacticalv2) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
+        #tactical_md = _call_twice(prompt_tacticalv2) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
 
-        prompt_summary = f"""
-You are a professional football scout tasked with writing a concise but detailed scouting synthesis for a player.  
-You will be given multiple tables of structured data from a scouting report.  
-These tables are assigned to placeholder variables so you can reference them directly.
-
-Variables:
-- {{scouting_metrics_table}} = Table with per90 stats and percentiles for key metrics.
-- {{style_fit_matrix_table}} = Table showing fit scores for roles vs team play styles.
-- {{standard_stats_table}} = Table with season-by-season standard stats for the past two seasons.
-- {{scout_summary_points}} = Short bullet points of strengths, weaknesses, and areas to improve from the current report.
-- {{tactical_fit_points}} = Tactical fit bullet points from the current report.
-- {{presentation_player}} = Presentation of the player
-
-Task:
-1. Read all data carefully.
-2. Write a **Scouting Synthesis Text Analysis** in a professional recruitment style, 3–5 paragraphs long.
-3. The analysis must:
-   - Summarize the player’s technical, tactical, physical (if available), and mental traits based on the data.
-   - Highlight key statistical strengths and weaknesses, referencing percentile rankings or per90 numbers.
-   - Discuss positional versatility and the style of play the player best suits.
-   - Interpret trends across seasons in {{standard_stats_table}}.
-   - Integrate {{scout_summary_points}} and {{tactical_fit_points}} into the narrative.
-   - Provide a short "Summary Projection" paragraph explaining what level/system the player suits best and what conditions are required for success.
-4. Avoid simply restating the tables — interpret them for a scouting audience.
-5. Keep language concise, analytical, and decision-focused.
-
-Output format:
-- Paragraph 1: Overview and key profile traits.
-- Paragraph 2: Attacking and creative attributes, referencing key metrics.
-- Paragraph 3: Defensive/physical profile and limitations.
-- Paragraph 4: Tactical fit and adaptability to systems.
-- Paragraph 5: Summary projection for recruitment purposes.
-
-Now generate the scouting synthesis based on:
-{{scouting_metrics_table}}:
-{scout_pct_only_md}
-
-{{style_fit_matrix_table}}
-{multi_style_md}
-
-{{standard_stats_table}}:
-{trend_block_md}
-
-{{scout_summary_points}}:
-{scouting_md}
-
-{{tactical_fit_points}}:
-{tactical_md}
-
-{{presentation_player}}:
-{presentation_md}
- 
-{_lang_block(language)}
-"""
-        
         prompt_summaryv2 = f"""
 <role>  
 You are a professional football scout skilled in synthesizing structured data into clear, evaluative scouting reports for recruitment teams.  
@@ -620,7 +491,6 @@ Follow these steps:
    - `{{style_fit_matrix_table}}`: Fit scores showing player-role compatibility across tactical styles.
    - `{{standard_stats_table}}`: Season-by-season stats (past two seasons).
    - `{{scout_summary_points}}`: Bullet points of strengths, weaknesses, and areas for improvement.
-   - `{{tactical_fit_points}}`: Tactical fit summary from role analysis.
    - `{{presentation_player}}`: Player profile introduction.
 
 2. Write a 3–5 paragraph scouting synthesis. Your analysis must:
@@ -630,7 +500,7 @@ Follow these steps:
    * Highlight standout strengths and critical weaknesses.
    * Discuss the player’s **positional versatility** and **fit within tactical systems**.
    * Analyze **trends across seasons** from the standard stats table.
-   * Integrate insights from `{{scout_summary_points}}` and `{{tactical_fit_points}}` smoothly into the narrative.
+   * Integrate insights from `{{scout_summary_points}}` smoothly into the narrative.
    * Conclude with a **Summary Projection** indicating:
 
      * Optimal role/system.
@@ -660,19 +530,16 @@ Structure your output in **five short paragraphs** as follows:
 {{scouting_metrics_table}}:  
 {scout_pct_only_md}
 
-{{style\_fit\_matrix\_table}}:
+{{style_fit_matrix_table}}:
 {multi_style_md}
 
-{{standard\_stats\_table}}:
+{{standard_stats_table}}:
 {trend_block_md}
 
-{{scout\_summary\_points}}:
+{{scout_summary_points}}:
 {scouting_md}
 
-{{tactical\_fit\_points}}:
-{tactical_md}
-
-{{presentation\_player}}:
+{{presentation_player}}:
 {presentation_md}
 </user-input>
 
@@ -693,7 +560,7 @@ Structure your output in **five short paragraphs** as follows:
             #f"{title_verdict}\n\n{verdict_md}\n\n---\n\n"
             f"{title_scout}\n\n{scouting_md}\n\n---\n\n"
             #f"{title_trend}\n\n{trends_md}\n\n---\n\n"
-            f"{title_tactic}\n\n{tactical_md}\n\n---\n\n"
+            #f"{title_tactic}\n\n{tactical_md}\n\n---\n\n"
             f"{title_summary}\n\n{summary_md}"
         )
 

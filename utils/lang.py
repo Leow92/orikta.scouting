@@ -5,8 +5,19 @@ def _is_fr(language: str | None) -> bool:
 
 def _lang_block(language: str | None) -> str:
     if _is_fr(language):
-        return ("Only provide the output standalone. Write your answer in **French**")
-    return ("Only provide the output standalone.")
+        # Strong, redundant constraints help smaller local models
+        return (
+            "Write the ENTIRE answer in **French**. "
+            "Do not include any English words, headings, labels, or code comments. "
+            "If you accidentally use English, **discard and restart in French**. "
+            "<answer_language>French</answer_language>"
+        )
+    return (
+        "Write the ENTIRE answer in **English**. "
+        "Do not include any French words, headings, labels, or code comments. "
+        "If you accidentally use French, **discard and restart in English**. "
+        "<answer_language>English</answer_language>"
+    )
 
 def _glossary_block_for(language: str, present_metrics: List[str]) -> str:
     # Minimal glossary like in utils/llm_analysis_player.py
