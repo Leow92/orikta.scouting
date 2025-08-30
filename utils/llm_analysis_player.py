@@ -552,7 +552,7 @@ Structure your output in **five short paragraphs** as follows:
         #title_verdict = "### 💼 Verdict" if not _is_fr(language) else "### 💼 Verdict"
         title_scout = "### 🧾 Scouting Analysis" if not _is_fr(language) else "### 🧾 Analyse scouting"
         #title_trend = "### 📈 Performance Evolution" if not _is_fr(language) else "### 📈 Évolution des performances"
-        title_tactic = "### ♟️ Tactical Fit" if not _is_fr(language) else "### ♟️ Adaptation tactique"
+        #title_tactic = "### ♟️ Tactical Fit" if not _is_fr(language) else "### ♟️ Adaptation tactique"
         title_summary = "### ♟️ Overall Summary" if not _is_fr(language) else "### ♟️ Résumé Global"
 
         final_md = (

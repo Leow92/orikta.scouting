@@ -1,4 +1,5 @@
 # utils/llm_analysis_comparison.py
+
 from __future__ import annotations
 from typing import Callable
 from utils.lang import _lang_block
@@ -72,7 +73,7 @@ Short one-sentence rationale (role fit + impact + risk + style).
 {_lang_block(language)}
 """.strip()
     
-    prompt_verdict_2 = f"""
+    prompt_verdict = f"""
 <role> You are an **elite tactical football analyst** advising a top European football club on transfer decisions. </role> <task> Your task is to **recommend the better signing** between two players (**{A_name}** and **{B_name}**) for the **{role_label}** role, based solely on provided scouting and trend data. </task> <instructions> Follow the evaluation framework below to assess each player and make a decision: * Assign a **total weighted score (out of 100)** and a **confidence rating (1–5)**. * Base your analysis only on the structured data blocks provided. * Prioritize evaluation criteria by the assigned weightings: - **Role Fit & Current Level (35 points)** — Based on percentiles directly related to the {role_label}. - **Immediate Impact (20 points)** — Average of the top 3 role-critical percentiles per player. - **Development Upside (15 points)** — Based on seasonal trends (improving > consistent > declining). - **Risk Profile (20 points)** — Penalize for: - Role-critical weaknesses (<25th percentile), - Negative multi-metric trend patterns, - Availability or fitness concerns. - **Style Fit (10 points)** — Based on the head-to-head style match section. Weight by style influence ({style_influence:.2f}).
 
 Tie-breaking logic:
@@ -135,7 +136,7 @@ Order by **role importance**, then absolute gap Δp.
 {_lang_block(language)}
 """.strip()
     
-    prompt_scouting_2 = f"""
+    prompt_scouting = f"""
 <role> You are a **tactical football analyst** producing a role-specific head-to-head scouting summary. </role> <task> Your task is to compare **{A_name}** and **{B_name}** for the **{role_label}** role using only percentile-based scouting data. </task> <instructions> Create a structured bullet list highlighting where each player leads, with these constraints:
 
 🟢 Where {A_name} leads:
@@ -197,7 +198,7 @@ Give one line per system with a short “because” citing 1–2 key metrics (Me
 {_lang_block(language)}
 """.strip()
     
-    prompt_tactical_fit_2 = f"""
+    prompt_tactical_fit = f"""
 <role> You are a **tactical football analyst** comparing player suitability across different formations. </role> <task> Your task is to determine whether **{A_name}** or **{B_name}** is a better fit for the **{role_label}** in each of the following systems: **4-3-3**, **4-4-2**, and **3-5-2**. </task> <instructions> For each formation: * Pick **only one** player — either {A_name} or {B_name}. * Justify the choice in **one sentence**. * Include **1–2 key metrics** in the format: `Metric — XXp` (percentile). * Do **not** reference seasonal trends, availability, or team style. * Focus strictly on **role-relevant percentile metrics** that influence system-specific performance.
 
 Format (repeat for each system):
@@ -222,9 +223,9 @@ Scouting — {B_name}
     def _fallback() -> str:
         return "donnée indisponible" if _is_fr(language) else "insufficient data"
 
-    exec_md = call_fn(prompt_verdict_2, language) or _fallback()
-    scout_h2h_md = call_fn(prompt_scouting_2, language) or _fallback()
-    system_fit_md = call_fn(prompt_tactical_fit_2, language) or _fallback()
+    exec_md = call_fn(prompt_verdict, language) or _fallback()
+    scout_md = call_fn(prompt_scouting, language) or _fallback()
+    system_fit_md = call_fn(prompt_tactical_fit, language) or _fallback()
 
     # Titles localized here (no dependency on _t)
     if _is_fr(language):
@@ -239,6 +240,6 @@ Scouting — {B_name}
     return (
         "### 🧠 LLM Comparison\n\n"
         f"{title_exec}\n\n{exec_md}\n\n---\n\n"
-        f"{title_h2h}\n\n{scout_h2h_md}\n\n---\n\n"
+        f"{title_h2h}\n\n{scout_md}\n\n---\n\n"
         f"{title_sys}\n\n{system_fit_md}"
     )
