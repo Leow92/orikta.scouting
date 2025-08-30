@@ -207,15 +207,6 @@ def analyze_single_player_workflow(
         if not grade_role_str:
             grade_role_str = f"Detected role: {role.upper()} (confidence {conf:.2f})"
 
-        # ---------- Common caller ----------
-        base_payload_opts = {
-            "temperature": 0.15,
-            "top_p": 0.9,
-            "repeat_penalty": 1.05,
-            "num_ctx": 2048,
-            "num_predict": 800,
-        }
-
         def _ollama_stream(user_content: str, language: str) -> str:
             payload = {
                 "model": "gemma3",
@@ -257,46 +248,6 @@ def analyze_single_player_workflow(
                 return _ollama_stream(prompt_text, language)   # <-- pass language from outer scope
             except ReadTimeout:
                 return _ollama_stream(prompt_text, language)
-
-        # ---------- Prompt 1: Investment Verdict ----------
-        prompt_verdict = f"""
-You are an elite tactical football analyst advising a top European club. Your club position itself on {player}. 
-
-# TASK
-You will produce an investment verdict (BUY / HOLD / PASS) with a weighted score and confidence, using only the rubric below and the provided data.
-
-# RUBRIC (weights sum to 100)
-1) Role Fit & Current Level (30) — from role grade in "Role & Grade".
-2) Immediate Impact (20) — mean of top-3 **role-critical** percentiles from the scouting table.
-3) Development Upside (15) — from seasonal trends: +5 per clear Improving metric (max +15).
-4) Risk Profile (25) — start 100, subtract:
-   -10 each role-critical weakness <25p (max −30)
-   -5 each Declining metric in trends (max −15)
-   -10 if availability risk (low 90s or missing minutes). Normalize 0–100.
-5) System Fit / Versatility (10) — up to 10 if ≥2 systems show 2–3 credible positions backed by strong percentiles; else 5 if only one fits; else 0.
-
-Total = weighted sum.
-Verdict mapping: BUY (≥80 & no red flag) / HOLD (65–79 or one moderate risk) / PASS (<65 or any red flag).
-Red flags: multiple role-critical weaknesses <20p; clear multi-metric decline; availability concern.
-
-Confidence (1–5): start 3; +1 broad scouting coverage; +1 coherent complete trends; −1 key metrics missing; −1 trends absent.
-
-# DATA
-## Role & Grade
-{grade_role_str}
-{(f"- Top weighted drivers:\n{drivers_md}" if grade_ctx else "").strip()}
-{(f"- Missing signals:\n{missing_md}" if grade_ctx else "").strip()}
-
-## Scouting Summary (last 365d)
-{scout_pct_only_md}
-
-## Seasonal Trends (last two seasons)
-{trend_block_md}
-
-Only provide the output standalone.
-""".strip()
-
-        #verdict_md = _call_twice(prompt_verdict) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
 
         # Build once, reuse for Prompts 2 & 4
         scout_pct_only = scout_df[["Percentile"]].copy()
@@ -376,105 +327,8 @@ Then, organize output into three clear sections using the following headers:
 {_lang_block(language)}
 """.strip()
 
-        # ---------- Prompt 3: Performance Evolution (trends only) ----------
-        prompt_trends = f"""
-You are a tactical football analyst. You are comparing the performance of {player} between the last two seasons, the data are available in DATA.
-
-# TASK
-From seasonal stats only, list up to 3 metrics each:
-- Improving Metrics
-- Consistent Metrics
-- Declining Metrics (add a plausible one-clause reason if relevant: role change, minutes, league strength)
-Do not use the scouting table.
-
-# DATA
-## Seasonal Trends (last two seasons)
-{trend_block_md}
-
-## Scouting Metrics Glossary
-{glossary_block}
-
-Only provide the output standalone.
-""".strip()
-
-        #trends_md = _call_twice(prompt_trends) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
-
-        # ---------- Prompt 4: Tactical Fit (scouting + role) ----------
-        prompt_tacticalv2 = f"""
-<role>  
-You are a tactical football analyst with expertise in player profiling and formation fit analysis.  
-</role>
-
-<task>  
-Your task is to analyze {player}’s profile to identify their best tactical fits across multiple formations, based solely on scouting percentiles and role context.  
-</task>
-
-<instructions>  
-For each of the following systems — **4-3-3**, **4-4-2**, and **3-5-2** — do the following:
-* Recommend **2–3 best-fit positions** using only valid taxonomy positions: `fw`, `mf`, `df`, `gk` and their subroles.
-* For each position, provide a concise, one-line explanation that:
-   - Cites 1–2 relevant metrics using the format `XXp` (rounded percentiles).
-   - Explains *why* the player fits that position, based on their strengths and role alignment.
-
-**Important Rules:**
-
-* Use only data from the provided scouting table — no seasonal stats.
-* Ground all position fits in percentile data and role priorities.
-* Do **not fabricate** data or interpret outside the given metrics.
-
-</instructions>
-
-<context>  
-- Player: {player}  
-- Detected role: **{role.upper()}** (confidence: {conf:.2f})  
-- Role priorities: {_role_guide(role, language)}  
-- Role grading & interpretation:  
-  {grade_role_str}  
-</context>
-
-<examples>  
-**Example for 4-3-3:**  
-- `CM (mf/creator)`: High passing (87p) and progressive carries (84p) suit advanced midfield playmaker role.  
-- `RW (fw/inverter)`: Acceleration (89p) and xA (85p) match inverted wide-forward profile.  
-</examples>
-
-<output-format>  
-Structure your answer like this: 
-🔷 4-3-3  
-- [POSITION]: [Short reason with metric(s) — XXp]  
-- ...  
-
-🔷 4-4-2
-
-* [POSITION]: [Short reason with metric(s) — XXp]
-* ...
-
-🔷 3-5-2
-
-* [POSITION]: [Short reason with metric(s) — XXp]
-* ...
-</output-format>
-
-<user-input>  
-## Scouting Summary (last 365d)  
-{scout_pct_only_md}
-
-## Multi Style Positions Table  
-{multi_style_md}
-
-## Scouting Metrics Glossary  
-{glossary_block}
-
-## Presentation of the Player  
-{presentation_md}
-</user-input>
-
-{_lang_block(language)}  
-""".strip()
-
         scouting_md = _call_twice(prompt_scoutingv2) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
-        #tactical_md = _call_twice(prompt_tacticalv2) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
-
+        
         prompt_summaryv2 = f"""
 <role>  
 You are a professional football scout skilled in synthesizing structured data into clear, evaluative scouting reports for recruitment teams.  

@@ -227,7 +227,7 @@ with st.sidebar:
 if st.session_state.history:
     chosen = st.session_state.history[st.session_state.selected_history_index]
     st.markdown(f"### {_t('result_title')}")
-    st.markdown(chosen["response"])
+    st.markdown(chosen["response"], unsafe_allow_html=True)
     styles_chosen = ", ".join(chosen.get("styles", [])) or "—"
     mode = "Fast" if chosen.get("skip_llm") else "Full"
     st.caption(_t("meta_line").format(
@@ -256,9 +256,13 @@ if st.session_state.history:
     def md_to_html(md_text: str, title: str = "Onix Report") -> str:
         try:
             import markdown  # pip install markdown
-            body = markdown.markdown(md_text, extensions=["tables", "fenced_code"])
+            body = markdown.markdown(
+                md_text,
+                extensions=["tables", "fenced_code"]
+            )
         except Exception:
             body = f"<pre>{md_text}</pre>"
+
         css = """
         body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;line-height:1.55;padding:24px;color:#111}
         table{border-collapse:collapse;width:100%}
@@ -268,6 +272,7 @@ if st.session_state.history:
         code,pre{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace}
         """
         return f"<!doctype html><html><head><meta charset='utf-8'><title>{title}</title><style>{css}</style></head><body>{body}</body></html>"
+
 
     html_bytes = md_to_html(chosen["response"], title="Onix — Scouting Report").encode("utf-8")
     st.download_button(

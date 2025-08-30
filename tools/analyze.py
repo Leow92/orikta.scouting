@@ -19,6 +19,8 @@ from tools.grading import (
     PLAY_STYLE_PRETTY
 )
 from utils.lang import _is_fr
+from ui.graph import create_spider_graph
+import streamlit as st
 
 # ------------------------- #
 # Config & small utilities  #
@@ -443,7 +445,7 @@ def analyze_player(
 
     try:
         # 1) Profile + raw positions
-        profile = scrape_player_profile(url)  # {"name","attributes","paragraphs","position_hint"}
+        profile = scrape_player_profile(url)
         if profile.get("name"):
             full_name = profile["name"]
 
@@ -452,7 +454,19 @@ def analyze_player(
             if str(a.get("label", "")).lower().startswith("position"):
                 pos_raw = a.get("value")
                 break
-        positions = normalize_positions_from_profile(pos_raw)  # list[(base, sub|None)]
+                
+        # This line correctly gets a list of (base, sub) tuples
+        positions = normalize_positions_from_profile(pos_raw)
+
+        # Get the first position tuple from the list for the primary role
+        if positions:
+            role_base, role_sub = positions[0]
+        else:
+            # Fallback if no position is found
+            role_base, role_sub = "mf", None
+            
+        # Combine to create the role_hint string
+        role_hint = f"{role_base}:{role_sub}" if role_sub else role_base
 
         items = _merge_profile_items(profile)
         presentation_md = _profile_table_md(full_name, items, language)
@@ -588,11 +602,28 @@ def analyze_player(
         scout_title = _t(f"### 🧾 Scouting Report ({ctxt})",
                          f"### 🧾 Rapport de scouting ({ctxt})",
                          language)
+        
+        # NEW: Generate the spider graph here before the final output
+        if "Percentile" in scout_df.columns:
+            scout_df["Percentile"] = pd.to_numeric(scout_df["Percentile"], errors="coerce")
+
+        # Update the function call with the player's specific role
+        spider_fig = create_spider_graph(
+            player_data=scout_df,
+            player_name=full_name,
+            role_hint=role_hint, # Pass the new role variable
+            language=language
+        )
 
         # 3) Optionally skip LLM for fast preview
         if skip_llm:
             _log("⚡ Fast preview: skipping LLM.")
+            st.plotly_chart(spider_fig, use_container_width=True)
+            spider_graph_html = spider_fig.to_html(full_html=False, include_plotlyjs='cdn')
+            print("✅ Report Generation Done.")
+
             return _md(f"""
+{spider_graph_html}
 {presentation_md}
 {SEPARATOR}
 {scout_title}
@@ -628,9 +659,13 @@ def analyze_player(
             presentation_md=presentation_md,
         )
 
+        # Display the graph in Streamlit before the markdown
+        st.plotly_chart(spider_fig, use_container_width=True)
+        spider_graph_html = spider_fig.to_html(full_html=False, include_plotlyjs='cdn')
         print("✅ Report Generation Done.")
-
+        
         return _md(f"""
+{spider_graph_html}
 {presentation_md}
 {SEPARATOR}
 {scout_title}
