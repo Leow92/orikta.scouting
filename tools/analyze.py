@@ -19,7 +19,7 @@ from tools.grading import (
     PLAY_STYLE_PRETTY
 )
 from utils.lang import _is_fr
-from ui.graph_GPT import create_spider_graph
+from ui.graph import create_spider_graph
 import streamlit as st
 
 # ------------------------- #
