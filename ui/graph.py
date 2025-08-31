@@ -3,6 +3,7 @@
 import plotly.graph_objects as go
 import pandas as pd
 from typing import List
+import numpy as np
 
 from tools.grading import (
     DEFAULT_WEIGHTS,
@@ -57,12 +58,12 @@ def create_spider_graph(
     metrics_to_plot = _get_role_metrics(role_hint)
 
     if language.lower().startswith("fr"):
-        plot_title = f"{player_name} Percentile - 365 derniers jours {role_hint}"
+        plot_title = f"{player_name} Percentiles (365 derniers jours) {role_hint}"
         axis_title = "Percentile"
         threshold_name = f"{int(threshold)}% des joueurs"
         #role_label = "Rôle"
     else:
-        plot_title = f"{player_name} Percentile - Last 365 days {role_hint}"
+        plot_title = f"{player_name} Percentiles (Last 365 days) {role_hint}"
         axis_title = "Percentile"
         threshold_name = f"{int(threshold)}% of players"
         #role_label = "Role"
@@ -169,4 +170,141 @@ def create_spider_graph(
         showlegend=True
     )
 
+    return fig
+
+def create_spider_graph_duo(
+    playerA_data: pd.DataFrame,
+    playerB_data: pd.DataFrame,
+    playerA_name: str,
+    playerB_name: str,
+    role_hint: str,
+    language: str,
+    threshold: float = 75.0,
+    show_threshold: bool = True
+) -> go.Figure:
+    """
+    Two-player spider chart on the same axes.
+    - Uses the role_hint to pick the metric set (same as single-player).
+    - Only plots metrics that exist for BOTH players (to keep polygons aligned).
+    """
+    metrics_all = _get_role_metrics(role_hint)
+
+    # i18n bits
+    if language.lower().startswith("fr"):
+        plot_title = f"{playerA_name} vs {playerB_name} — Percentiles (365 jours) {role_hint}"
+        axis_title = "Percentile"
+        threshold_name = f"{int(threshold)}% des joueurs"
+    else:
+        plot_title = f"{playerA_name} vs {playerB_name} — Percentiles (Last 365 days) {role_hint}"
+        axis_title = "Percentile"
+        threshold_name = f"{int(threshold)}% of players"
+
+    # ensure numeric
+    for df in (playerA_data, playerB_data):
+        if "Percentile" in df.columns:
+            df["Percentile"] = pd.to_numeric(df["Percentile"], errors="coerce")
+
+    # build aligned series (only metrics present for both)
+    labels, valsA, valsB = [], [], []
+    for metric in metrics_all:
+        a_name = _match_metric_name(list(playerA_data.index), metric)
+        b_name = _match_metric_name(list(playerB_data.index), metric)
+        if not a_name or not b_name:
+            continue
+        a_pct = playerA_data.loc[a_name, "Percentile"] if a_name in playerA_data.index else np.nan
+        b_pct = playerB_data.loc[b_name, "Percentile"] if b_name in playerB_data.index else np.nan
+        if pd.isna(a_pct) or pd.isna(b_pct):
+            continue
+        a_val = _invert_if_negative(a_name, float(a_pct))
+        b_val = _invert_if_negative(b_name, float(b_pct))
+        labels.append(metric)
+        valsA.append(a_val)
+        valsB.append(b_val)
+
+    if not labels:
+        # fallback: avoid crash if nothing overlaps (shouldn't happen after your table alignment)
+        labels = ["No common metrics"]
+        valsA = [0.0]
+        valsB = [0.0]
+
+    # close polygons
+    labels_c = labels + [labels[0]]
+    valsA_c  = valsA  + [valsA[0]]
+    valsB_c  = valsB  + [valsB[0]]
+
+    # colors for A/B (Okabe–Ito palette, same vibe as single)
+    A_line = PALETTE["sky"]       # blue
+    A_fill = "rgba(86,180,233,0.22)"
+    B_line = PALETTE["orange"]    # orange
+    B_fill = "rgba(230,159,0,0.22)"
+
+    fig = go.Figure()
+
+    # A
+    fig.add_trace(go.Scatterpolar(
+        r=valsA_c,
+        theta=labels_c,
+        fill="toself",
+        name=playerA_name,
+        line=dict(color=A_line, width=3),
+        fillcolor=A_fill,
+        mode="lines+markers",
+        marker=dict(size=7, symbol="circle", color=A_line,
+                    line=dict(color=THEME["player_marker_line"], width=1.6)),
+        hovertemplate=f"<b>%{{theta}}</b><br>%{{r:.1f}} {axis_title}<extra>{playerA_name}</extra>"
+    ))
+
+    # B
+    fig.add_trace(go.Scatterpolar(
+        r=valsB_c,
+        theta=labels_c,
+        fill="toself",
+        name=playerB_name,
+        line=dict(color=B_line, width=3),
+        fillcolor=B_fill,
+        mode="lines+markers",
+        marker=dict(size=7, symbol="circle", color=B_line,
+                    line=dict(color=THEME["player_marker_line"], width=1.6)),
+        hovertemplate=f"<b>%{{theta}}</b><br>%{{r:.1f}} {axis_title}<extra>{playerB_name}</extra>"
+    ))
+
+    # Optional threshold ring
+    if show_threshold:
+        fig.add_trace(go.Scatterpolar(
+            r=[threshold] * len(labels_c),
+            theta=labels_c,
+            mode="lines",
+            name=threshold_name,
+            line=dict(color=THEME["threshold_line"], width=2.5, dash="dash"),
+            hoverinfo="skip"
+        ))
+
+    # layout
+    fig.update_layout(
+        title=dict(text=plot_title, font=dict(size=18, color=THEME["font"])),
+        title_x=0.5,
+        polar=dict(
+            bgcolor=THEME["polar_bg"],
+            radialaxis=dict(visible=True, range=[0, 100],
+                            title=dict(text=axis_title, font=dict(size=10, color=THEME["axis_tick"])),
+                            tickmode="linear", dtick=25,
+                            gridcolor=THEME["axis_grid"], gridwidth=1,
+                            tickfont=dict(color=THEME["axis_tick"])),
+            angularaxis=dict(gridcolor=THEME["axis_grid"], gridwidth=1,
+                             tickfont=dict(color=THEME["font"]))
+        ),
+        paper_bgcolor=THEME["paper_bg"],
+        font=dict(color=THEME["font"]),
+        legend=dict(
+            bgcolor=THEME["legend_bg"],
+            bordercolor="rgba(0,0,0,0)",
+            orientation="h",
+            yanchor="top", y=-0.22,
+            xanchor="center", x=0.5,
+            font=dict(size=12, color=THEME["font"])
+        ),
+        margin=dict(l=40, r=40, t=70, b=120),
+        hoverlabel=dict(bgcolor="#1F2937", font_size=12, font_color="#F9FAFB", namelength=-1),
+        showlegend=True
+    )
     return fig

@@ -614,10 +614,9 @@ def analyze_player(
             role_hint=role_hint,
             language=language
         )
-        raw_plotly = spider_fig.to_html(full_html=False, include_plotlyjs='cdn')
+        raw_plotly = spider_fig.to_html(full_html=False, include_plotlyjs='inline')
         # Add clear markers:
         spider_graph_html = f"<!--PLOTLY_START-->{raw_plotly}<!--PLOTLY_END-->"
-
 
         # 3) Optionally skip LLM for fast preview
         if skip_llm:

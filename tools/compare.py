@@ -24,6 +24,7 @@ from tools.grading import (
 )
 from utils.llm_analysis_comparison import compare_llm_workflow
 from utils.lang import _is_fr, _lang_block, _glossary_block_for
+from ui.graph import create_spider_graph_duo
 
 # --- LLM basics (same as your single-player workflow) ---
 OLLAMA_API_URL = "http://localhost:11434/api/chat"
@@ -365,6 +366,20 @@ def compare_players(
         sub  = target_role.split(":")[1] if ":" in target_role else None
         role_label = label_from_pair(base, sub)
 
+        # 3b) Duo spider graph for the two players on target_role
+        spider_duo_fig = create_spider_graph_duo(
+            playerA_data=scoutA,
+            playerB_data=scoutB,
+            playerA_name=A_name,
+            playerB_name=B_name,
+            role_hint=target_role,
+            language=language,
+            threshold=75.0,
+            show_threshold=True
+        )
+        duo_plot_html = f"<!--PLOTLY_START-->{spider_duo_fig.to_html(full_html=False, include_plotlyjs='cdn')}<!--PLOTLY_END-->"
+        duo_plot_html_inline = f"<!--PLOTLY_START-->{spider_duo_fig.to_html(full_html=False, include_plotlyjs='inline')}<!--PLOTLY_END-->"
+
         # 4) Build weights (role → optional style reweight)
         base_w = DEFAULT_WEIGHTS.get(base, DEFAULT_WEIGHTS["mf"])
         sub_w  = SUBROLE_WEIGHTS.get(sub) if sub else None
@@ -454,12 +469,15 @@ def compare_players(
 {style_line}  
 {sim_line}
 
+{duo_plot_html_inline}
+
 {style_section_title}
 {style_rows_md}
 
 #### {_t('Key role-critical differences (top 12 by role weight × gap)','Différences clés (top 12 par poids × écart)', language)}
 {aligned_diff_md}
 """
+
 
         # Build glossary here (keeps utils module pure)
         present_metrics = []
