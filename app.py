@@ -220,7 +220,6 @@ with st.sidebar:
     else:
         st.info(_t("sidebar_history_empty"))
 
-
 def display_report(report_md: str):
     START = "<!--PLOTLY_START-->"
     END = "<!--PLOTLY_END-->"
@@ -249,7 +248,6 @@ def display_report(report_md: str):
             return
 
     st.markdown(report_md)
-
 
 def md_to_html(md_text: str, title: str = "Onix Report") -> str:
         try:
@@ -280,7 +278,6 @@ def md_to_html(md_text: str, title: str = "Onix Report") -> str:
         code,pre{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace}
         """
         return f"<!doctype html><html><head><meta charset='utf-8'><title>{title}</title><style>{css}</style></head><body>{body}</body></html>"
-
 
 # -------- Main Display --------
 if st.session_state.history:
