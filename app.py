@@ -28,9 +28,8 @@ UI_STRINGS = {
         "spinner": "🔎 Building report…",
         "result_title": "🧠 Result",
         "meta_line": "⏱️ Generated in {s:.1f}s • Lang: {lang} • Styles: {styles}",
-        "downloads_title": "⬇️ Download",
-        "download_md": "Download Markdown (.md)",
-        "download_html": "Download HTML (.html)",
+        "downloads_title": "⬇️ Download the Report",
+        
     },
     "fr": {
         "title": "🪨 onix.scouting",
@@ -51,9 +50,7 @@ UI_STRINGS = {
         "spinner": "🔎 Génération du rapport…",
         "result_title": "🧠 Résultat",
         "meta_line": "⏱️ Généré en {s:.1f}s • Langue : {lang} • Styles : {styles}",
-        "downloads_title": "⬇️ Téléchargements",
-        "download_md": "Télécharger Markdown (.md)",
-        "download_html": "Télécharger HTML (.html)",
+        "downloads_title": "⬇️ Téléchargez le Rapport",
     },
 }
 
@@ -223,11 +220,76 @@ with st.sidebar:
     else:
         st.info(_t("sidebar_history_empty"))
 
+
+def display_report(report_md: str):
+    START = "<!--PLOTLY_START-->"
+    END = "<!--PLOTLY_END-->"
+    if START in report_md and END in report_md:
+        pre, rest = report_md.split(START, 1)
+        plotly_html, post = rest.split(END, 1)
+
+        if pre.strip():
+            st.markdown(pre)
+        st.components.v1.html(plotly_html, height=520, scrolling=False)
+        if post.strip():
+            st.markdown(post)
+        return
+
+    # Fallback to the heuristic if markers are missing:
+    s = report_md
+    start = s.find('<div id="')
+    if start != -1:
+        first_close = s.find('</script>', start)
+        second_close = s.find('</script>', first_close + 9) if first_close != -1 else -1
+        end = (second_close + 9) if second_close != -1 else (first_close + 9 if first_close != -1 else -1)
+        if end != -1:
+            st.markdown(s[:start])
+            st.components.v1.html(s[start:end], height=520, scrolling=False)
+            st.markdown(s[end:])
+            return
+
+    st.markdown(report_md)
+
+
+def md_to_html(md_text: str, title: str = "Onix Report") -> str:
+        try:
+            import markdown
+            
+            # Split the markdown text at the first instance of a HTML block
+            parts = md_text.split('<html>', 1)
+            
+            # The first part is any markdown text before the HTML.
+            body_start = markdown.markdown(parts[0], extensions=["tables", "fenced_code"])
+            
+            # The second part is the raw HTML of the graph plus the rest of the markdown.
+            if len(parts) > 1:
+                raw_html_content = '<html>' + parts[1]
+                body = raw_html_content
+            else:
+                body = body_start
+
+        except Exception:
+            body = f"<pre>{md_text}</pre>"
+            
+        css = """
+        body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;line-height:1.55;padding:24px;color:#111}
+        table{border-collapse:collapse;width:100%}
+        th,td{border:1px solid #ddd;padding:6px;text-align:left}
+        th{background:#f8fafc;color:#111;font-weight:600}
+        h1,h2,h3{margin-top:1.2em}
+        code,pre{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace}
+        """
+        return f"<!doctype html><html><head><meta charset='utf-8'><title>{title}</title><style>{css}</style></head><body>{body}</body></html>"
+
+
 # -------- Main Display --------
 if st.session_state.history:
     chosen = st.session_state.history[st.session_state.selected_history_index]
     st.markdown(f"### {_t('result_title')}")
-    st.markdown(chosen["response"], unsafe_allow_html=True)
+    
+    # Use the new helper function to display the report content.
+    display_report(chosen["response"])
+    
     styles_chosen = ", ".join(chosen.get("styles", [])) or "—"
     mode = "Fast" if chosen.get("skip_llm") else "Full"
     st.caption(_t("meta_line").format(
@@ -245,38 +307,10 @@ if st.session_state.history:
 
     fname_base = _slugify(chosen["prompt"])
 
-    st.download_button(
-        _t("download_md"),
-        data=chosen["response"],
-        file_name=f"{fname_base}.md",
-        mime="text/markdown",
-        use_container_width=True,
-    )
-
-    def md_to_html(md_text: str, title: str = "Onix Report") -> str:
-        try:
-            import markdown  # pip install markdown
-            body = markdown.markdown(
-                md_text,
-                extensions=["tables", "fenced_code"]
-            )
-        except Exception:
-            body = f"<pre>{md_text}</pre>"
-
-        css = """
-        body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;line-height:1.55;padding:24px;color:#111}
-        table{border-collapse:collapse;width:100%}
-        th,td{border:1px solid #ddd;padding:6px;text-align:left}
-        th{background:#f8fafc;color:#111;font-weight:600}
-        h1,h2,h3{margin-top:1.2em}
-        code,pre{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace}
-        """
-        return f"<!doctype html><html><head><meta charset='utf-8'><title>{title}</title><style>{css}</style></head><body>{body}</body></html>"
-
-
+    # The md_to_html function is now at the top.
     html_bytes = md_to_html(chosen["response"], title="Onix — Scouting Report").encode("utf-8")
     st.download_button(
-        _t("download_html"),
+        _t("HTML"),
         data=html_bytes,
         file_name=f"{fname_base}.html",
         mime="text/html",

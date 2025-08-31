@@ -1,5 +1,5 @@
 from tools.compare import compare_players
-from tools.analyze import analyze_player  # or analyze_2 if that's your filename
+from tools.analyze import analyze_player
 
 def route_command(tool_call: dict, language: str = "English",
                   styles: list[str] | None = None,

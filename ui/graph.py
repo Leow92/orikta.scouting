@@ -60,12 +60,12 @@ def create_spider_graph(
         plot_title = f"{player_name} Percentile - 365 derniers jours {role_hint}"
         axis_title = "Percentile"
         threshold_name = f"{int(threshold)}% des joueurs"
-        role_label = "Rôle"
+        #role_label = "Rôle"
     else:
         plot_title = f"{player_name} Percentile - Last 365 days {role_hint}"
         axis_title = "Percentile"
         threshold_name = f"{int(threshold)}% of players"
-        role_label = "Role"
+        #role_label = "Role"
 
     if "Percentile" in player_data.columns:
         player_data["Percentile"] = pd.to_numeric(player_data["Percentile"], errors="coerce")
@@ -126,9 +126,9 @@ def create_spider_graph(
     fig.update_layout(
         title=dict(
             text=plot_title,
-            font=dict(size=22, color=THEME["font"])
+            font=dict(size=18, color=THEME["font"])
         ),
-        title_x=0.2,  # ✅ ensures perfectly centered title
+        title_x=0.5,
         polar=dict(
             bgcolor=THEME["polar_bg"],
             radialaxis=dict(
@@ -170,16 +170,3 @@ def create_spider_graph(
     )
 
     return fig
-
-"""
-        annotations=[
-            dict(
-                text=f"{role_label}: {pretty_role}",
-                showarrow=False,
-                xref="paper", yref="paper",
-                x=0.5, y=1.0,
-                xanchor="center", yanchor="bottom",
-                font=dict(size=12, color=THEME["axis_tick"])
-            )
-        ],
-"""

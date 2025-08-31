@@ -611,17 +611,18 @@ def analyze_player(
         spider_fig = create_spider_graph(
             player_data=scout_df,
             player_name=full_name,
-            role_hint=role_hint, # Pass the new role variable
+            role_hint=role_hint,
             language=language
         )
+        raw_plotly = spider_fig.to_html(full_html=False, include_plotlyjs='cdn')
+        # Add clear markers:
+        spider_graph_html = f"<!--PLOTLY_START-->{raw_plotly}<!--PLOTLY_END-->"
+
 
         # 3) Optionally skip LLM for fast preview
         if skip_llm:
             _log("⚡ Fast preview: skipping LLM.")
-            st.plotly_chart(spider_fig, use_container_width=True)
-            spider_graph_html = spider_fig.to_html(full_html=False, include_plotlyjs='cdn')
             print("✅ Report Generation Done.")
-
             return _md(f"""
 {presentation_md}
 {spider_graph_html}
@@ -659,9 +660,6 @@ def analyze_player(
             presentation_md=presentation_md,
         )
 
-        # Display the graph in Streamlit before the markdown
-        st.plotly_chart(spider_fig, use_container_width=True)
-        spider_graph_html = spider_fig.to_html(full_html=False, include_plotlyjs='cdn')
         print("✅ Report Generation Done.")
         
         return _md(f"""
