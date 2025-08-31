@@ -57,14 +57,14 @@ def create_spider_graph(
     metrics_to_plot = _get_role_metrics(role_hint)
 
     if language.lower().startswith("fr"):
-        plot_title = f"{player_name}"
+        plot_title = f"{player_name} Percentile - 365 derniers jours {role_hint}"
         axis_title = "Percentile"
-        threshold_name = f"Seuil {int(threshold)}%"
+        threshold_name = f"{int(threshold)}% des joueurs"
         role_label = "Rôle"
     else:
-        plot_title = f"{player_name}"
+        plot_title = f"{player_name} Percentile - Last 365 days {role_hint}"
         axis_title = "Percentile"
-        threshold_name = f"{int(threshold)}th Percentile"
+        threshold_name = f"{int(threshold)}% of players"
         role_label = "Role"
 
     if "Percentile" in player_data.columns:
@@ -128,17 +128,7 @@ def create_spider_graph(
             text=plot_title,
             font=dict(size=22, color=THEME["font"])
         ),
-        title_x=0.5,  # ✅ ensures perfectly centered title
-        annotations=[
-            dict(
-                text=f"{role_label}: {pretty_role}",
-                showarrow=False,
-                xref="paper", yref="paper",
-                x=0.5, y=1.0,
-                xanchor="center", yanchor="bottom",
-                font=dict(size=12, color=THEME["axis_tick"])
-            )
-        ],
+        title_x=0.2,  # ✅ ensures perfectly centered title
         polar=dict(
             bgcolor=THEME["polar_bg"],
             radialaxis=dict(
@@ -180,3 +170,16 @@ def create_spider_graph(
     )
 
     return fig
+
+"""
+        annotations=[
+            dict(
+                text=f"{role_label}: {pretty_role}",
+                showarrow=False,
+                xref="paper", yref="paper",
+                x=0.5, y=1.0,
+                xanchor="center", yanchor="bottom",
+                font=dict(size=12, color=THEME["axis_tick"])
+            )
+        ],
+"""
