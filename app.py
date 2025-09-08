@@ -10,7 +10,7 @@ from tools.grading import PLAY_STYLE_PRESETS, PLAY_STYLE_PRETTY
 # ---------------- UI Strings (EN/FR) ---------------- #
 UI_STRINGS = {
     "en": {
-        "title": "🪨 onix.scouting",
+        "title": "orikta.scouting",
         "caption": "Tactical scouting, powered by your local stack.",
         "sidebar_language": "🌐 Language",
         "sidebar_styles_title": "🎛️ Team Play Styles",
@@ -32,7 +32,7 @@ UI_STRINGS = {
         
     },
     "fr": {
-        "title": "🪨 onix.scouting",
+        "title": "orikta.scouting",
         "caption": "Scouting tactique, propulsé par votre stack locale.",
         "sidebar_language": "🌐 Langue",
         "sidebar_styles_title": "🎛️ Styles de jeu d’équipe",
