@@ -8,8 +8,10 @@ import pandas as pd
 import requests
 from requests.exceptions import ReadTimeout
 from utils.lang import _is_fr, _lang_block
+import os
 
 OLLAMA_API_URL = "http://localhost:11434/api/chat"
+#OLLAMA_API_BASE = os.getenv("OLLAMA_API_BASE", "http://localhost:11434")
 
 # ----------------------------- #
 # Language utils & presentation #

@@ -51,8 +51,8 @@ streamlit run app.py
   * **Fast preview (skip LLM)**
 * **Prompt examples**
 
-  * Single: `Analyze: Cherki`
-  * Compare: `Compare: Mbappe vs Mohamedsalah`
+  * Single: `Analyze Cherki`
+  * Compare: `Mbappe vs Mohamedsalah`
 * Download results as **Markdown** or **HTML**.
 
 ## Deterministic vs LLM
