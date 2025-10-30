@@ -27,14 +27,9 @@ from utils.lang import _is_fr, _lang_block, _glossary_block_for
 from ui.graph import create_spider_graph_duo
 
 # --- LLM basics (same as your single-player workflow) ---
-OLLAMA_API_URL = "http://localhost:11434/api/chat"
-BASE_OPTS = {
-    "temperature": 0.15,
-    "top_p": 0.9,
-    "repeat_penalty": 1.05,
-    "num_ctx": 2048,
-    "num_predict": 800,
-}
+#OLLAMA_API_URL = "http://localhost:11434/api/chat"
+from requests.exceptions import ReadTimeout
+from utils.llm_client import _groq_chat
 
 # -----------------------------
 # Deterministic helpers
@@ -281,47 +276,11 @@ def _fetch_player(name: str, language: str = "English"):
 # -----------------------------
 # LLM streaming
 # -----------------------------
-def _ollama_stream(user_content: str, language: str) -> str:
-    payload = {
-        "model": "gemma3",
-        "messages": [
-            {"role": "system", "content": _lang_block(language)},   # <-- language enforced here
-            {"role": "user",   "content": user_content},
-        ],
-        "stream": True,
-        "keep_alive": "30m",
-        "options": {
-            "temperature": 0.15,
-            "top_p": 0.9,
-            "repeat_penalty": 1.05,
-            "num_ctx": 2048,
-            "num_predict": 800,
-        },
-    }
-    chunks: list[str] = []
-    with requests.post(OLLAMA_API_URL, json=payload, timeout=300, stream=True) as r:
-        r.raise_for_status()
-        for line in r.iter_lines(decode_unicode=True):
-            if not line:
-                continue
-            try:
-                ev = json.loads(line)
-            except Exception:
-                continue
-            if isinstance(ev, dict) and ev.get("error"):
-                raise RuntimeError(ev["error"])
-            msg = ev.get("message", {})
-            if isinstance(msg, dict) and "content" in msg:
-                chunks.append(msg["content"])
-            if ev.get("done"):
-                break
-    return "".join(chunks).strip()
-
 def _call_twice(prompt_text: str, language: str) -> str:
     try:
-        return _ollama_stream(prompt_text, language)   # <-- pass language from outer scope
+        return _groq_chat(prompt_text, language)
     except ReadTimeout:
-        return _ollama_stream(prompt_text, language)
+        return _groq_chat(prompt_text, language)
 
 # -----------------------------
 # Public API
