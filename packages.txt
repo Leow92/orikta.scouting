@@ -1,0 +1,16 @@
+# Linux system dependencies required by Playwright browsers
+libnss3
+libatk1.0-0
+libatk-bridge2.0-0
+libdrm2
+libgbm1
+libxcb1
+libxcomposite1
+libxdamage1
+libxfixes3
+libxrandr2
+libasound2
+libxkbcommon0
+libpango-1.0-0
+libpangocairo-1.0-0
+libgtk-3-0
