@@ -297,7 +297,7 @@ Then, organize output into three clear sections using the following headers:
 {_lang_block(language)}
 """.strip()
 
-        scouting_md = _call_twice(prompt_scoutingv2) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
+        scouting_md = _call_twice(prompt_scoutingv2, language) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
         
         prompt_summaryv2 = f"""
 <role>  
@@ -370,7 +370,7 @@ Structure your output in **five short paragraphs** as follows:
 {_lang_block(language)} 
 """.strip()
         
-        summary_md = _call_twice(prompt_summaryv2) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
+        summary_md = _call_twice(prompt_summaryv2, language) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
 
         # ---------- Assemble final markdown ----------
         #title_verdict = "### 💼 Verdict" if not _is_fr(language) else "### 💼 Verdict"
