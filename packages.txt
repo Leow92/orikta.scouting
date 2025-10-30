@@ -4,6 +4,7 @@ libatk-bridge2.0-0
 libdrm2
 libgbm1
 libxcb1
+libx11-xcb1
 libxcomposite1
 libxdamage1
 libxfixes3
