@@ -12,3 +12,4 @@ lxml==5.2.2
 
 # Browser automation for FBref URL resolving
 playwright==1.46.0
+groq

@@ -14,7 +14,7 @@ A local, privacy-first football scouting app built with Streamlit. It scrapes FB
 
 * Python 3.11+ (tested on 3.12)
 * Playwright (for FBref fetching)
-* Ollama running locally (with a pulled model, e.g. `gemma3`)
+* Groq provider (with a pulled model, e.g. `gpt-oss-20b`)
 
 ## Quick Start
 
@@ -27,11 +27,6 @@ pip install -r requirements.txt
 
 # 3) Playwright browsers
 python -m playwright install
-
-# 4) Ollama (install separately)
-Link to install Ollama: https://ollama.com/download/mac
-ollama pull gemma3 # google model used from ollama
-ollama serve  # keep running
 
 # 5) Run the app
 streamlit run app.py
