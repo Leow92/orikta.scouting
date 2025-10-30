@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 from typing import Tuple, List, Dict, Optional
-import json
 import math
 import pandas as pd
-import requests
 from requests.exceptions import ReadTimeout
 import numpy as np
 
@@ -223,7 +221,6 @@ def _resolve_style_preset(style_key: Optional[str], base: Optional[str], sub: Op
                 flat[str(k).lower()] = flat.get(str(k).lower(), 0.0) + float(v)
 
     return flat
-
 
 # -----------------------------
 # Fetch & normalize one player

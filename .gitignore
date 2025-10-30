@@ -4,7 +4,3 @@
 
 # --- Python cache / build files ---
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.py.class

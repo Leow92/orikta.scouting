@@ -1,17 +1,13 @@
 # utils/llm_analysis_player.py
 
 from __future__ import annotations
-import json
 from datetime import datetime
 from typing import Iterable
 import pandas as pd
-import requests
 from requests.exceptions import ReadTimeout
 from utils.lang import _is_fr, _lang_block
-import os
 from requests.exceptions import ReadTimeout
 from utils.llm_client import _groq_chat
-
 
 #OLLAMA_API_URL = "http://localhost:11434/api/chat"
 #OLLAMA_API_BASE = os.getenv("OLLAMA_API_BASE", "http://localhost:11434")

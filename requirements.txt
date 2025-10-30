@@ -1,15 +1,10 @@
-# Core app
-streamlit==1.37.1
-pandas==2.2.2
-numpy==1.26.4
-requests==2.32.3
-markdown==3.6
-
-# HTML parsing for scraping (pandas.read_html + your scraper)
-beautifulsoup4==4.12.3
-html5lib==1.1
-lxml==5.2.2
-
-# Browser automation for FBref URL resolving
-playwright==1.46.0
-groq
+beautifulsoup4==4.14.2
+groq==0.33.0
+Markdown==3.6
+numpy==2.3.4
+pandas==2.3.3
+playwright==1.54.0
+plotly==6.3.0
+python-dotenv==1.2.1
+Requests==2.32.5
+streamlit==1.47.1
