@@ -1,4 +1,4 @@
-# orikta.scouting (onix.scouting)
+# orikta.scouting (orikta.scouting)
 
 A local, privacy-first football scouting app built with Streamlit. It scrapes FBref player pages, computes deterministic grades and style fits, and (optionally) asks a local LLM (via Ollama) to produce concise scouting notes — in English or French.
 

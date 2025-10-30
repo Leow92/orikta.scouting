@@ -62,7 +62,7 @@ def _t(key: str) -> str:
     return UI_STRINGS.get(lang, UI_STRINGS["en"]).get(key, UI_STRINGS["en"].get(key, key))
 
 # -------- Page config & CSS (high-contrast table headers) --------
-st.set_page_config(page_title="onix.scouting — Single Player", page_icon="🪨", layout="wide")
+st.set_page_config(page_title="orikta.scouting — Single Player", page_icon="🪨", layout="wide")
 st.markdown("""
 <style>
 /* Base */
@@ -73,10 +73,10 @@ hr { border: none; border-top: 1px solid #e5e7eb; margin: 24px 0; }
 
 /* Tables (thèmes clair & sombre) */
 .stMarkdown table { width: 100%; border-collapse: collapse; }
-.stMarkdown th, .stMarkdown td { padding: 6px; border: 1px solid var(--onix-border, #e5e7eb); }
+.stMarkdown th, .stMarkdown td { padding: 6px; border: 1px solid var(--orikta-border, #e5e7eb); }
 
 /* Clair par défaut */
-.stMarkdown th { background: var(--onix-th-bg, #f8fafc); color: var(--onix-th-text, #111); font-weight: 600; }
+.stMarkdown th { background: var(--orikta-th-bg, #f8fafc); color: var(--orikta-th-text, #111); font-weight: 600; }
 /* On NE FORCE PAS la couleur des td : elles héritent du thème */
 
 /* Sombre */
@@ -109,7 +109,7 @@ with st.sidebar:
     st.markdown(f"### {_t('sidebar_styles_title')}")
     styles_all = list(PLAY_STYLE_PRESETS.keys())
     style_labels = {k: PLAY_STYLE_PRETTY.get(k, k) for k in styles_all}
-    prev_styles = st.session_state.get("_onix_styles", styles_all)
+    prev_styles = st.session_state.get("_orikta_styles", styles_all)
     styles = st.multiselect(
         "Team play styles",                     # <= non-empty
         options=styles_all,
@@ -121,7 +121,7 @@ with st.sidebar:
     style_strength = st.slider(
         "Style influence",                      # <= non-empty
         0.0, 1.0,
-        st.session_state.get("_onix_style_strength", 0.6),
+        st.session_state.get("_orikta_style_strength", 0.6),
         0.05,
         label_visibility="collapsed",
     )
@@ -129,10 +129,10 @@ with st.sidebar:
     st.markdown("---")
     fast_preview = st.toggle(
         _t("sidebar_fast_preview"),
-        value=st.session_state.get("_onix_fast_preview", False),
+        value=st.session_state.get("_orikta_fast_preview", False),
         help=_t("sidebar_fast_preview_help")
     )
-    verbose = st.toggle(_t("sidebar_verbose"), value=st.session_state.get("_onix_verbose", False))
+    verbose = st.toggle(_t("sidebar_verbose"), value=st.session_state.get("_orikta_verbose", False))
 
     st.markdown("---")
     clear_hist = st.button(_t("sidebar_clear_history"))
@@ -172,10 +172,10 @@ if submitted and user_input and user_input != st.session_state.last_prompt:
     if tool:
         with st.spinner(_t("spinner")):
             # Persist UI options
-            st.session_state["_onix_styles"] = styles
-            st.session_state["_onix_style_strength"] = style_strength
-            st.session_state["_onix_fast_preview"] = fast_preview
-            st.session_state["_onix_verbose"] = verbose
+            st.session_state["_orikta_styles"] = styles
+            st.session_state["_orikta_style_strength"] = style_strength
+            st.session_state["_orikta_fast_preview"] = fast_preview
+            st.session_state["_orikta_verbose"] = verbose
 
             t0 = time.time()
             try:
@@ -249,7 +249,7 @@ def display_report(report_md: str):
 
     st.markdown(report_md)
 
-def md_to_html(md_text: str, title: str = "Onix Report") -> str:
+def md_to_html(md_text: str, title: str = "orikta Report") -> str:
         try:
             import markdown
             
@@ -305,7 +305,7 @@ if st.session_state.history:
     fname_base = _slugify(chosen["prompt"])
 
     # The md_to_html function is now at the top.
-    html_bytes = md_to_html(chosen["response"], title="Onix — Scouting Report").encode("utf-8")
+    html_bytes = md_to_html(chosen["response"], title="orikta — Scouting Report").encode("utf-8")
     st.download_button(
         _t("HTML"),
         data=html_bytes,
