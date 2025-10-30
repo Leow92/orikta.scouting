@@ -5,15 +5,25 @@ from bs4 import BeautifulSoup, Comment, NavigableString, Tag
 from playwright.sync_api import sync_playwright
 import time
 from typing import List, Dict, Any
-import subprocess
-import os
+import subprocess, os, shutil
 
-# Ensure browsers are installed when running in Streamlit Cloud
+# Ensure Playwright browsers are available on Streamlit Cloud
 try:
-    if not os.path.exists("/home/appuser/.cache/ms-playwright"):
-        subprocess.run(["playwright", "install", "--with-deps"], check=True)
+    cache_path = os.path.expanduser("~/.cache/ms-playwright")
+    if not os.path.exists(cache_path) or not any(
+        os.path.isdir(os.path.join(cache_path, d)) for d in os.listdir(cache_path)
+    ):
+        # install browsers only (no sudo, no --with-deps)
+        subprocess.run(
+            ["playwright", "install", "chromium", "firefox", "webkit"],
+            check=True
+        )
+        print("✅ Playwright browsers installed successfully.")
+    else:
+        print("✅ Playwright browsers already present.")
 except Exception as e:
-    print(f"⚠️ Playwright install failed: {e}")
+    print(f"⚠️ Playwright browser install skipped or failed: {e}")
+
 
 def fetch_rendered_html(url: str, wait_time: float = 3.5) -> str:
     """Uses Playwright to fetch fully rendered HTML."""
