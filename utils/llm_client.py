@@ -12,8 +12,9 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 # Initialize Groq client
 _client = Groq(api_key=GROQ_API_KEY)
+model_chosen = "openai/gpt-oss-20b"
 
-def _groq_chat(user_content: str, language: str, model: str = "openai/gpt-oss-20b") -> str:
+def _groq_chat(user_content: str, language: str, model= model_chosen) -> str:
     """
     Generate a chat completion using Groq's official Python SDK.
     This function mirrors the previous Ollama streaming logic but
