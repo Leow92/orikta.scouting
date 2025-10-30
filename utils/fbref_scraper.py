@@ -5,6 +5,15 @@ from bs4 import BeautifulSoup, Comment, NavigableString, Tag
 from playwright.sync_api import sync_playwright
 import time
 from typing import List, Dict, Any
+import subprocess
+import os
+
+# Ensure browsers are installed when running in Streamlit Cloud
+try:
+    if not os.path.exists("/home/appuser/.cache/ms-playwright"):
+        subprocess.run(["playwright", "install", "--with-deps"], check=True)
+except Exception as e:
+    print(f"⚠️ Playwright install failed: {e}")
 
 def fetch_rendered_html(url: str, wait_time: float = 3.5) -> str:
     """Uses Playwright to fetch fully rendered HTML."""
