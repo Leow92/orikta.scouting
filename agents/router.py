@@ -13,16 +13,16 @@ def route_command(tool_call: dict, language: str = "English",
         return compare_players(
             args,
             language=language,
-            styles=styles,
-            style_influence=style_strength,  # name differs in compare.py
+            #styles=styles,
+            #style_influence=style_strength,  # name differs in compare.py
             skip_llm=skip_llm,
         )
     elif command == "analyze":
         return analyze_player(
             args,
             language=language,
-            styles=styles,
-            style_strength=style_strength,
+            #styles=styles,
+            #style_strength=style_strength,
             skip_llm=skip_llm,
         )
     else:

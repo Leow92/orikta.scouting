@@ -225,21 +225,21 @@ Scouting — {B_name}
 
     exec_md = call_fn(prompt_verdict, language) or _fallback()
     scout_md = call_fn(prompt_scouting, language) or _fallback()
-    system_fit_md = call_fn(prompt_tactical_fit, language) or _fallback()
+    #system_fit_md = call_fn(prompt_tactical_fit, language) or _fallback()
 
     # Titles localized here (no dependency on _t)
     if _is_fr(language):
         title_exec = f"### 💼 Verdict — {A_name} vs {B_name}"
         title_h2h  = f"### 🧾 Analyse comparée — {A_name} vs {B_name}"
-        title_sys  = f"### ♟️ Adaptation tactique — {A_name} vs {B_name}"
+        #title_sys  = f"### ♟️ Adaptation tactique — {A_name} vs {B_name}"
     else:
         title_exec = f"### 💼 Executive Verdict — {A_name} vs {B_name}"
         title_h2h  = f"### 🧾 Head-to-Head Scouting — {A_name} vs {B_name}"
-        title_sys  = f"### ♟️ System Fit — {A_name} vs {B_name}"
+        #title_sys  = f"### ♟️ System Fit — {A_name} vs {B_name}"
 
     return (
         "### 🧠 LLM Comparison\n\n"
         f"{title_exec}\n\n{exec_md}\n\n---\n\n"
         f"{title_h2h}\n\n{scout_md}\n\n---\n\n"
-        f"{title_sys}\n\n{system_fit_md}"
+        #f"{title_sys}\n\n{system_fit_md}"
     )

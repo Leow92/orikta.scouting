@@ -417,7 +417,7 @@ def analyze_player(
     players: list[str],
     language: str = "English",
     styles: list[str] | None = None,
-    style_strength: float = 0.6,
+    style_strength: float = 0,
     skip_llm: bool = False,
 ) -> str:
     """

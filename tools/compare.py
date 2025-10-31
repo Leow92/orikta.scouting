@@ -287,7 +287,7 @@ def compare_players(
     language: str = "English",
     target_role: str | None = None,     # e.g., "df:cb"
     styles: list[str] | None = None,    # optional styles to display in rows
-    style_influence: float = 0.6,
+    style_influence: float = 0,
     skip_llm: bool = False,
 ) -> str:
     """

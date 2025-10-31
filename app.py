@@ -5,7 +5,7 @@ import streamlit as st
 from agents.router import route_command
 from utils.prompt_parser import parse_prompt
 from ui.branding import footer_brand
-from tools.grading import PLAY_STYLE_PRESETS, PLAY_STYLE_PRETTY
+#from tools.grading import PLAY_STYLE_PRESETS, PLAY_STYLE_PRETTY
 
 # ---------------- UI Strings (EN/FR) ---------------- #
 UI_STRINGS = {
@@ -13,9 +13,6 @@ UI_STRINGS = {
         "title": "orikta.scouting",
         "caption": "Tactical scouting, powered by your local stack.",
         "sidebar_language": "🌐 Language",
-        "sidebar_styles_title": "🎛️ Team Play Styles",
-        "sidebar_select_styles": "Select styles",
-        "sidebar_style_strength": "Style influence",
         "sidebar_fast_preview": "⚡ Fast preview (skip LLM)",
         "sidebar_fast_preview_help": "Show presentation + scouting + grades + style matrix; skip LLM analysis for speed.",
         "sidebar_verbose": "Verbose logs",
@@ -35,9 +32,6 @@ UI_STRINGS = {
         "title": "orikta.scouting",
         "caption": "Scouting tactique, propulsé par votre stack locale.",
         "sidebar_language": "🌐 Langue",
-        "sidebar_styles_title": "🎛️ Styles de jeu d’équipe",
-        "sidebar_select_styles": "Sélectionner les styles",
-        "sidebar_style_strength": "Influence du style",
         "sidebar_fast_preview": "⚡ Aperçu rapide (sans LLM)",
         "sidebar_fast_preview_help": "Affiche présentation + scouting + notes + matrice de style ; saute l’analyse LLM.",
         "sidebar_verbose": "Logs détaillés",
@@ -89,6 +83,7 @@ hr { border: none; border-top: 1px solid #e5e7eb; margin: 24px 0; }
 """, unsafe_allow_html=True)
 
 # -------- Sidebar: Language & Options --------
+# -------- Sidebar: Language & Options --------
 with st.sidebar:
     st.markdown(f"### {_t('sidebar_language')}")
     current_lang = st.session_state.get("language", "English")
@@ -105,26 +100,7 @@ with st.sidebar:
     st.session_state.language = "Français" if selection.startswith("Fr") else "English"
     language = st.session_state.language
 
-    st.markdown("---")
-    st.markdown(f"### {_t('sidebar_styles_title')}")
-    styles_all = list(PLAY_STYLE_PRESETS.keys())
-    style_labels = {k: PLAY_STYLE_PRETTY.get(k, k) for k in styles_all}
-    prev_styles = st.session_state.get("_orikta_styles", styles_all)
-    styles = st.multiselect(
-        "Team play styles",                     # <= non-empty
-        options=styles_all,
-        default=prev_styles,
-        format_func=lambda k: style_labels.get(k, k),
-        key="styles",
-        label_visibility="collapsed",
-    )
-    style_strength = st.slider(
-        "Style influence",                      # <= non-empty
-        0.0, 1.0,
-        st.session_state.get("_orikta_style_strength", 0.6),
-        0.05,
-        label_visibility="collapsed",
-    )
+    # --- Removed Play Style section entirely ---
 
     st.markdown("---")
     fast_preview = st.toggle(
@@ -136,6 +112,7 @@ with st.sidebar:
 
     st.markdown("---")
     clear_hist = st.button(_t("sidebar_clear_history"))
+
 
 # Clear history if requested
 if clear_hist:
@@ -172,8 +149,8 @@ if submitted and user_input and user_input != st.session_state.last_prompt:
     if tool:
         with st.spinner(_t("spinner")):
             # Persist UI options
-            st.session_state["_orikta_styles"] = styles
-            st.session_state["_orikta_style_strength"] = style_strength
+            #st.session_state["_orikta_styles"] = styles
+            #st.session_state["_orikta_style_strength"] = style_strength
             st.session_state["_orikta_fast_preview"] = fast_preview
             st.session_state["_orikta_verbose"] = verbose
 
@@ -182,8 +159,8 @@ if submitted and user_input and user_input != st.session_state.last_prompt:
                 response = route_command(
                     {"command": tool, "args": players},
                     language=language,
-                    styles=styles,
-                    style_strength=style_strength,
+                    #styles=styles,
+                    #style_strength=style_strength,
                     skip_llm=fast_preview
                 )
                 elapsed = time.time() - t0
@@ -193,8 +170,8 @@ if submitted and user_input and user_input != st.session_state.last_prompt:
                     "response": response,
                     "elapsed": elapsed,
                     "language": language,
-                    "styles": styles,
-                    "style_strength": style_strength,
+                    #"styles": styles,
+                    #"style_strength": style_strength,
                     "skip_llm": fast_preview,
                 })
                 st.session_state.selected_history_index = 0
