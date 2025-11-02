@@ -2,8 +2,6 @@
 
 import re
 
-
-
 def parse_prompt(prompt: str) -> dict:
     """
     Parses user prompt to extract intent and player names.
@@ -20,8 +18,8 @@ def parse_prompt(prompt: str) -> dict:
 
     # --- 1️⃣ Tool Detection ---
     compare_keywords = [
-        "compare", "versus", "vs", "against", "between",  # English
-        "comparer", "contre", "vs.", "versus", "face à", "entre"  # French
+        "compare", "versus", "vs", "against", "between", "and"  # English
+        "comparer", "contre", "vs.", "versus", "face à", "entre", "et"  # French
     ]
     analyze_keywords = [
         "analyze", "analyse", "evaluate", "scout", "assess", "study", "look at",  # English
