@@ -375,8 +375,10 @@ Structure your output in **five short paragraphs** as follows:
         #title_tactic = "### ♟️ Tactical Fit" if not _is_fr(language) else "### ♟️ Adaptation tactique"
         title_summary = "### ♟️ Overall Summary" if not _is_fr(language) else "### ♟️ Résumé Global"
 
+        title_analysis = "### 🧠 Deep Analysis" if not _is_fr(language) else "### 🧠 Analyse Poussée"
+
         final_md = (
-            "### 🧠 LLM Analysis\n\n"
+            f"{title_analysis}\n\n"
             #f"{title_verdict}\n\n{verdict_md}\n\n---\n\n"
             f"{title_scout}\n\n{scouting_md}\n\n---\n\n"
             #f"{title_trend}\n\n{trends_md}\n\n---\n\n"

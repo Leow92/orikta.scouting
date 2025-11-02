@@ -11,7 +11,7 @@ from ui.branding import footer_brand
 UI_STRINGS = {
     "en": {
         "title": "orikta.scouting",
-        "caption": "Tactical scouting, powered by your local stack.",
+        "caption": "Tactical scouting, analyse or compare any player(s).",
         "sidebar_language": "🌐 Language",
         "sidebar_fast_preview": "⚡ Fast preview (skip LLM)",
         "sidebar_fast_preview_help": "Show presentation + scouting + grades + style matrix; skip LLM analysis for speed.",
@@ -20,7 +20,7 @@ UI_STRINGS = {
         "sidebar_history": "🕓 Prompt History",
         "sidebar_history_empty": "No history yet.",
         "input_label": "💬 Ask your question",
-        "input_placeholder": "e.g. Analyze: Cherki • Compare: Mbappe vs Lamineyamal",
+        "input_placeholder": "e.g. Analyze Cherki • Compare Mbappe vs Yamal - always put a big letter in beginning of player's name!",
         "generate": "Generate",
         "spinner": "🔎 Building report…",
         "result_title": "🧠 Result",
@@ -30,7 +30,7 @@ UI_STRINGS = {
     },
     "fr": {
         "title": "orikta.scouting",
-        "caption": "Scouting tactique, propulsé par votre stack locale.",
+        "caption": "Scouting tactique, analysez ou comparez n’importe quel joueur.",
         "sidebar_language": "🌐 Langue",
         "sidebar_fast_preview": "⚡ Aperçu rapide (sans LLM)",
         "sidebar_fast_preview_help": "Affiche présentation + scouting + notes + matrice de style ; saute l’analyse LLM.",
@@ -39,7 +39,7 @@ UI_STRINGS = {
         "sidebar_history": "🕓 Historique des requêtes",
         "sidebar_history_empty": "Aucun historique.",
         "input_label": "💬 Saisissez votre requête",
-        "input_placeholder": "ex. Analyser : Cherki • Comparer : Mbappe vs Lamineyamal",
+        "input_placeholder": "ex. Analyser Cherki • Comparer Mbappe vs Yamal - toujours mettre une majuscule au début du nom des joueurs",
         "generate": "Générer",
         "spinner": "🔎 Génération du rapport…",
         "result_title": "🧠 Résultat",
