@@ -6,6 +6,8 @@ from playwright.sync_api import sync_playwright
 import time
 from typing import List, Dict, Any
 import subprocess, os, shutil
+#import undetected_playwright as up
+#from undetected_playwright.sync_api import sync_playwright
 
 # Ensure Playwright browsers are available on Streamlit Cloud
 try:
@@ -24,9 +26,8 @@ try:
 except Exception as e:
     print(f"⚠️ Playwright browser install skipped or failed: {e}")
 
-
 def fetch_rendered_html(url: str, wait_time: float = 3.5) -> str:
-    """Uses Playwright to fetch fully rendered HTML."""
+    #Uses Playwright to fetch fully rendered HTML.
     with sync_playwright() as p:
         browser = p.firefox.launch(headless=True)
         page = browser.new_page()

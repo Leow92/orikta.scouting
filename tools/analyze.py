@@ -4,7 +4,7 @@ from __future__ import annotations
 import textwrap
 from typing import Iterable, Optional
 import pandas as pd
-from utils.fbref_scraper import scrape_all_tables, scrape_player_profile
+from utils.fbref_scraper_api import fetch_rendered_html, scrape_player_profile_from_html, scrape_all_tables_from_html
 from utils.llm_analysis_player import analyze_single_player_workflow  # ← use the optimized light module
 from utils.resolve_player_url import search_fbref_url_with_playwright
 #from tools.grading_v2 import (compute_grade, rationale_from_breakdown, normalize_positions_from_profile, compute_grade_for_positions, label_from_pair)
@@ -444,8 +444,12 @@ def analyze_player(
     _log(f"✅ Using URL for {full_name}: {url}")
 
     try:
+        html = fetch_rendered_html(url)
+        profile = scrape_player_profile_from_html(html)
+        tables = scrape_all_tables_from_html(html)
+
         # 1) Profile + raw positions
-        profile = scrape_player_profile(url)
+        #profile = scrape_player_profile(url)
         if profile.get("name"):
             full_name = profile["name"]
 
@@ -472,7 +476,7 @@ def analyze_player(
         presentation_md = _profile_table_md(full_name, items, language)
 
         # 2) Tables
-        tables = scrape_all_tables(url)
+        #tables = scrape_all_tables(url)
 
         # 2a) Scouting table (primary)
         scout_key = next((k for k in tables.keys() if k.startswith("scout_summary")), None)
