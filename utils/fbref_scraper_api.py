@@ -23,7 +23,8 @@ def fetch_rendered_html(url: str, render: bool = True, timeout: int = 60) -> str
     params = {
         "api_key": SCRAPER_API_KEY,
         "url": url,
-        "render": "true" if render else "false",
+        "render": "false",
+        "premium": "true",
         "wait_for": "div#meta",  # helps ScraperAPI stop earlier
     }
 
