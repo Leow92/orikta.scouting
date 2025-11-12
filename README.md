@@ -1,8 +1,3 @@
-Perfect ✅ — here’s your **updated `README.md`** with all references changed from **Ollama** to **Groq**, matching your new setup and working Streamlit deployment.
-
----
-
-````markdown
 # orikta.scouting
 
 A local or cloud-deployed, privacy-first football scouting app built with Streamlit.  
