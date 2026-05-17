@@ -29,8 +29,8 @@ ROLE_ALIASES: Dict[str, Tuple[str, Optional[str]]] = {
     "cm": ("mf", "cm"), "central midfielder": ("mf", "cm"), "no. 8": ("mf", "cm"),
     "am": ("mf", "am"), "attacking midfielder": ("mf", "am"), "no. 10": ("mf", "am"),
     "wm": ("mf", "wm"), "wide midfielder": ("mf", "wm"),
-    # Forwards
-    "forward": ("fw", None), "fw": ("fw", None),
+    # Forwards / Attackers
+    "forward": ("fw", None), "fw": ("fw", None), "attacker": ("fw", None),
     "st": ("fw", "st"), "striker": ("fw", "st"), "cf": ("fw", "st"), "center forward": ("fw", "st"),
     "winger": ("fw", "w"), "rw": ("fw", "w"), "lw": ("fw", "w"),
     # Goalkeepers
@@ -56,151 +56,148 @@ def _normalize_role(role_hint: Optional[str]) -> Tuple[str, Optional[str]]:
     if "wide" in s or "wm" in s: return "mf", "wm"
     if any(k in s for k in ("st", "striker", "cf", "center forward")): return "fw", "st"
     if "winger" in s or " rw" in s or " lw" in s: return "fw", "w"
+    if any(k in s for k in ("attacker",)): return "fw", None
     if "df" in s or "defender" in s: return "df", None
     if "fw" in s or "forward" in s: return "fw", None
     return "mf", None
 
 # ----------------------------------
-# Weights: base roles + specific add
+# Weights: base roles + subrole add
 # ----------------------------------
+# All metric names match the output of utils/percentile_engine.stats_entry_to_per90()
+
 DEFAULT_WEIGHTS: Dict[str, Dict[str, float]] = {
     "fw": {
-        "Non-Penalty Goals": 0.18,
-        "npxG": 0.12,
-        "Shots Total": 0.08,
-        "xG": 0.06,
-        "Shot-Creating Actions": 0.12,
-        "Touches (Att Pen)": 0.08,
-        "Progressive Passes Received": 0.10,
-        "Aerials won %": 0.06,
-        "Assists": 0.08,
-        "Non-Penalty xG + xAG": 0.12,
+        "Goals per 90":      0.22,
+        "G+A per 90":        0.16,
+        "Shots per 90":      0.10,
+        "Shot Accuracy %":   0.10,
+        "Key Passes per 90": 0.12,
+        "Assists per 90":    0.10,
+        "Dribble Success %": 0.10,
+        "Duels Won %":       0.06,
+        "Dribbles per 90":   0.04,
     },
     "mf": {
-        "Progressive Passes": 0.14,
-        "Passes Completed (Short/Med/Long)": 0.08,
-        "Pass Completion %": 0.10,
-        "Progressive Carries": 0.12,
-        "Shot-Creating Actions": 0.12,
-        "xAG": 0.08,
-        "Assists": 0.08,
-        "Tackles": 0.10,
-        "Interceptions": 0.10,
-        "Ball Recoveries": 0.08,
+        "Key Passes per 90":    0.18,
+        "Pass Completion %":    0.14,
+        "Assists per 90":       0.12,
+        "Tackles per 90":       0.12,
+        "Interceptions per 90": 0.10,
+        "Dribble Success %":    0.10,
+        "Duels Won %":          0.10,
+        "Goals per 90":         0.07,
+        "Dribbles per 90":      0.07,
     },
     "df": {
-        "Tackles": 0.16,
-        "Interceptions": 0.14,
-        "Clearances": 0.10,
-        "Blocks": 0.08,
-        "Aerials won %": 0.14,
-        "Dribblers Tackled %": 0.08,
-        "Ball Recoveries": 0.10,
-        "Progressive Passes": 0.10,
-        "Pass Completion %": 0.10,
+        "Tackles per 90":       0.20,
+        "Interceptions per 90": 0.18,
+        "Blocks per 90":        0.14,
+        "Duels Won %":          0.18,
+        "Pass Completion %":    0.12,
+        "Fouls per 90":         0.10,   # negative metric — inverted in scoring
+        "Key Passes per 90":    0.08,
     },
     "gk": {
-        "Post-Shot xG +/- per 90": 0.22,
-        "Save%": 0.18,
-        "Crosses Stopped %": 0.12,
-        "Clean Sheets %": 0.10,
-        "Goals Against per 90": 0.06,
-        "Launch%": 0.06,
-        "Passes Attempted (Avg Len)": 0.06,
-        "Pass Completion % (Launched)": 0.10,
-        "Avg Distance of Def Actions": 0.10,
+        "Save %":                  0.30,
+        "Goals Conceded per 90":   0.25,  # negative metric
+        "Saves per 90":            0.20,
+        "Pass Completion %":       0.12,
+        "Duels Won %":             0.13,
     },
 }
 
 SUBROLE_WEIGHTS: Dict[str, Dict[str, float]] = {
     "cb": {
-        "Aerials won %": 0.10,
-        "Clearances": 0.08,
-        "Blocks": 0.06,
-        "Tackles": 0.06,
-        "Interceptions": 0.06,
-        "Progressive Passes": 0.04,
+        "Duels Won %":          0.12,
+        "Blocks per 90":        0.10,
+        "Tackles per 90":       0.08,
+        "Interceptions per 90": 0.08,
+        "Pass Completion %":    0.06,
     },
     "fb": {
-        "Progressive Carries": 0.10,
-        "Progressive Passes": 0.10,
-        "Shot-Creating Actions": 0.06,
-        "Crosses": 0.08,
-        "Aerials won %": 0.03,
-        "Tackles": 0.05,
-        "Interceptions": 0.05,
+        "Dribbles per 90":   0.12,
+        "Key Passes per 90": 0.12,
+        "Assists per 90":    0.10,
+        "Tackles per 90":    0.06,
+        "Duels Won %":       0.06,
     },
     "dm": {
-        "Tackles": 0.10,
-        "Interceptions": 0.10,
-        "Ball Recoveries": 0.08,
-        "Pressures": 0.06,
-        "Pass Completion %": 0.08,
-        "Progressive Passes": 0.06,
-        "Non-Penalty Goals": 0.02,
+        "Tackles per 90":       0.12,
+        "Interceptions per 90": 0.12,
+        "Duels Won %":          0.10,
+        "Pass Completion %":    0.08,
+        "Blocks per 90":        0.06,
+        "Key Passes per 90":    0.04,
     },
     "cm": {
-        "Progressive Passes": 0.10,
-        "Progressive Carries": 0.08,
-        "Pass Completion %": 0.08,
-        "Shot-Creating Actions": 0.06,
-        "xAG": 0.05,
-        "Assists": 0.05,
-        "Tackles": 0.05,
-        "Interceptions": 0.05,
+        "Key Passes per 90":    0.12,
+        "Pass Completion %":    0.10,
+        "Assists per 90":       0.08,
+        "Tackles per 90":       0.06,
+        "Dribbles per 90":      0.06,
+        "Interceptions per 90": 0.06,
+        "Goals per 90":         0.04,
     },
     "am": {
-        "Shot-Creating Actions": 0.12,
-        "xAG": 0.10,
-        "Assists": 0.10,
-        "Progressive Carries": 0.08,
-        "Non-Penalty xG + xAG": 0.08,
-        "Touches (Att Pen)": 0.06,
-        "Non-Penalty Goals": 0.06,
+        "Key Passes per 90": 0.14,
+        "Assists per 90":    0.12,
+        "G+A per 90":        0.10,
+        "Dribble Success %": 0.10,
+        "Dribbles per 90":   0.08,
+        "Goals per 90":      0.08,
     },
     "wm": {
-        "Progressive Carries": 0.10,
-        "Successful Take-Ons": 0.08,
-        "Crosses": 0.08,
-        "Shot-Creating Actions": 0.08,
-        "xAG": 0.06,
-        "Touches (Att Pen)": 0.06,
+        "Dribbles per 90":   0.12,
+        "Dribble Success %": 0.10,
+        "Key Passes per 90": 0.10,
+        "Assists per 90":    0.10,
+        "G+A per 90":        0.06,
     },
     "st": {
-        "Non-Penalty Goals": 0.14,
-        "npxG": 0.12,
-        "Shots Total": 0.10,
-        "Non-Penalty xG + xAG": 0.10,
-        "Touches (Att Pen)": 0.08,
-        "Aerials won %": 0.06,
-        "Progressive Passes Received": 0.10,
+        "Goals per 90":    0.18,
+        "G+A per 90":      0.12,
+        "Shots per 90":    0.12,
+        "Shot Accuracy %": 0.10,
+        "Duels Won %":     0.08,
+        "Dribbles per 90": 0.04,
     },
     "w": {
-        "Progressive Carries": 0.12,
-        "Successful Take-Ons": 0.10,
-        "Shot-Creating Actions": 0.10,
-        "xAG": 0.08,
-        "Assists": 0.08,
-        "Touches (Att Pen)": 0.08,
-        "Non-Penalty xG + xAG": 0.06,
+        "Dribbles per 90":   0.14,
+        "Dribble Success %": 0.12,
+        "Key Passes per 90": 0.12,
+        "Assists per 90":    0.10,
+        "G+A per 90":        0.08,
+        "Goals per 90":      0.06,
     },
 }
 
+# Aliases: allows the metric-matching function to find metrics even if the
+# exact string differs slightly. Since API-football metric names are now
+# standardized by percentile_engine, this list is intentionally short.
 ALIASES: Dict[str, List[str]] = {
-    "Touches (Att Pen)": ["Touches (Att Pen)", "Touches (Att Pen Area)", "Touches (Att Penalty Area)"],
-    "Dribblers Tackled %": ["Dribblers Tackled %", "Tkl% (Dribblers)"],
-    "Save%": ["Save%", "Save %"],
-    "Clean Sheets %": ["Clean Sheets %", "CS %"],
-    "Aerials won %": ["Aerials won %", "Aerial Win %", "Aerial Wins %"],
-    "Goals Against per 90": ["Goals Against per 90", "GA/90"],
-    "Post-Shot xG +/- per 90": ["Post-Shot xG +/- per 90", "PSxG+/-/90", "PSxG +/- per 90"],
-    "Passes Completed (Short/Med/Long)": ["Passes Completed (Short/Med/Long)", "Cmp (Short/Med/Long)", "Cmp (S/M/L)"],
-    "Ball Recoveries": ["Ball Recoveries", "Recoveries"],
-    "Crosses": ["Crosses", "Crosses Completed", "Cmp (Crosses)", "Crosses into Pen Area"],
+    "Goals per 90":         ["Goals per 90", "Goals/90"],
+    "Assists per 90":       ["Assists per 90", "Assists/90"],
+    "G+A per 90":           ["G+A per 90", "Goals+Assists per 90"],
+    "Shots per 90":         ["Shots per 90", "Shots Total per 90"],
+    "Shot Accuracy %":      ["Shot Accuracy %", "Shot On Target %"],
+    "Key Passes per 90":    ["Key Passes per 90", "Key Passes/90"],
+    "Pass Completion %":    ["Pass Completion %", "Pass Accuracy %"],
+    "Tackles per 90":       ["Tackles per 90", "Tackles/90"],
+    "Interceptions per 90": ["Interceptions per 90", "Interceptions/90"],
+    "Blocks per 90":        ["Blocks per 90", "Blocks/90"],
+    "Dribbles per 90":      ["Dribbles per 90", "Dribble Attempts per 90"],
+    "Dribble Success %":    ["Dribble Success %", "Dribbles Won %"],
+    "Duels Won %":          ["Duels Won %", "Duels Won %"],
+    "Fouls per 90":         ["Fouls per 90", "Fouls Committed per 90"],
+    "Save %":               ["Save %", "Save%", "Saves %"],
+    "Saves per 90":         ["Saves per 90", "Saves/90"],
+    "Goals Conceded per 90": ["Goals Conceded per 90", "GA/90", "Goals Against per 90"],
 }
 
 NEGATIVE_KEYS: List[str] = [
-    "Fouls", "Dispossessed", "Miscontrols", "Errors", "Times Tackled", "Goals Against per 90"
+    "Fouls per 90",
+    "Goals Conceded per 90",
 ]
 
 @dataclass
@@ -211,53 +208,52 @@ class GradeBreakdown:
     raw_score: float
     final_score: float
 
-SUBROLE_BLEND = 0.60  # base ⊕ subrole
+SUBROLE_BLEND = 0.60  # base ⊕ subrole blend factor
 
 # -----------------------------
-# Play-style presets (additive deltas to weights)
+# Play-style presets (additive weight deltas)
 # -----------------------------
-# Keys can be: "*", base ("df"), subrole label "df:cb", etc.
 PLAY_STYLE_PRESETS: Dict[str, Dict[str, Dict[str, float]]] = {
-    # Positional play, high line, ball circulation/progression
+    # Positional play — ball circulation, high line, build-up through GK
     "possession_high": {
-        "df": {"Progressive Passes": 0.08, "Pass Completion %": 0.06, "Progressive Carries": 0.04},
-        "df:cb": {"Progressive Passes": 0.06, "Pass Completion %": 0.06, "Aerials won %": -0.02, "Clearances": -0.03},
-        "df:fb": {"Progressive Carries": 0.10, "Progressive Passes": 0.08, "Crosses": 0.06},
-        "mf": {"Progressive Passes": 0.10, "Pass Completion %": 0.06, "Progressive Carries": 0.06, "Shot-Creating Actions": 0.04},
-        "fw": {"xAG": 0.04, "Shot-Creating Actions": 0.06, "Touches (Att Pen)": 0.04, "Non-Penalty Goals": 0.02},
-        "gk": {"Pass Completion % (Launched)": 0.10, "Passes Attempted (Avg Len)": -0.04, "Avg Distance of Def Actions": 0.06, "Launch%": -0.04},
+        "df":    {"Key Passes per 90": 0.08, "Pass Completion %": 0.06, "Dribbles per 90": 0.04},
+        "df:cb": {"Key Passes per 90": 0.06, "Pass Completion %": 0.06, "Duels Won %": -0.02},
+        "df:fb": {"Dribbles per 90": 0.10, "Key Passes per 90": 0.08, "Assists per 90": 0.06},
+        "mf":    {"Key Passes per 90": 0.10, "Pass Completion %": 0.06, "Dribbles per 90": 0.06},
+        "fw":    {"Assists per 90": 0.04, "Key Passes per 90": 0.06, "G+A per 90": 0.04},
+        "gk":    {"Pass Completion %": 0.10, "Save %": 0.04},
     },
-    # High pressing, vertical transitions
+    # High press + fast vertical transitions
     "high_press_transition": {
-        "df": {"Tackles": 0.06, "Interceptions": 0.06, "Pressures": 0.06, "Progressive Passes": 0.04},
-        "df:fb": {"Pressures": 0.06, "Progressive Carries": 0.06, "Successful Take-Ons": 0.04},
-        "mf": {"Pressures": 0.10, "Tackles": 0.08, "Interceptions": 0.08, "Progressive Carries": 0.06},
-        "fw": {"Pressures": 0.06, "Successful Take-Ons": 0.06, "Progressive Carries": 0.06, "npxG": 0.06, "Progressive Passes Received": 0.06},
-        "gk": {"Avg Distance of Def Actions": 0.08, "Launch%": 0.06},
+        "df":    {"Tackles per 90": 0.06, "Interceptions per 90": 0.06, "Fouls Drawn per 90": 0.04},
+        "df:fb": {"Fouls Drawn per 90": 0.06, "Dribbles per 90": 0.06, "Dribble Success %": 0.04},
+        "mf":    {"Fouls Drawn per 90": 0.08, "Tackles per 90": 0.08, "Interceptions per 90": 0.08, "Dribbles per 90": 0.06},
+        "fw":    {"Dribbles per 90": 0.06, "Dribble Success %": 0.06, "G+A per 90": 0.06},
+        "gk":    {"Pass Completion %": 0.06},
     },
-    # Deep block + counter
+    # Deep block + rapid counter-attack
     "low_block_counter": {
-        "df": {"Blocks": 0.10, "Clearances": 0.10, "Aerials won %": 0.10, "Interceptions": 0.06, "Tackles": 0.06,
-               "Progressive Passes": -0.06, "Pass Completion %": -0.04},
-        "df:cb": {"Blocks": 0.08, "Clearances": 0.10, "Aerials won %": 0.08},
-        "df:fb": {"Tackles": 0.06, "Interceptions": 0.06, "Crosses": -0.04},
-        "mf": {"Ball Recoveries": 0.08, "Tackles": 0.08, "Interceptions": 0.06, "Progressive Passes": -0.04},
-        "fw": {"Progressive Passes Received": 0.06, "Non-Penalty Goals": 0.06, "npxG": 0.06},
-        "gk": {"Save%": 0.08, "Post-Shot xG +/- per 90": 0.10, "Crosses Stopped %": 0.04, "Launch%": 0.04},
+        "df":    {"Blocks per 90": 0.10, "Duels Won %": 0.10, "Interceptions per 90": 0.06, "Tackles per 90": 0.06,
+                  "Key Passes per 90": -0.06, "Pass Completion %": -0.04},
+        "df:cb": {"Blocks per 90": 0.08, "Duels Won %": 0.08},
+        "df:fb": {"Tackles per 90": 0.06, "Interceptions per 90": 0.06},
+        "mf":    {"Tackles per 90": 0.08, "Interceptions per 90": 0.06, "Key Passes per 90": -0.04},
+        "fw":    {"Goals per 90": 0.06, "G+A per 90": 0.06},
+        "gk":    {"Save %": 0.08, "Goals Conceded per 90": -0.10},
     },
-    # Wide overloads & crossing focus
+    # Wide overloads, crossing-heavy system
     "crossing_wide": {
-        "df:fb": {"Crosses": 0.12, "Shot-Creating Actions": 0.06, "Progressive Carries": 0.06},
-        "mf:wm": {"Crosses": 0.10, "Shot-Creating Actions": 0.08},
-        "fw:w": {"Crosses": 0.10, "Shot-Creating Actions": 0.08, "Touches (Att Pen)": 0.06, "Successful Take-Ons": 0.06, "xAG": 0.06},
+        "df:fb": {"Assists per 90": 0.12, "Key Passes per 90": 0.06, "Dribbles per 90": 0.06},
+        "mf:wm": {"Assists per 90": 0.10, "Key Passes per 90": 0.08},
+        "fw:w":  {"Assists per 90": 0.10, "Key Passes per 90": 0.08, "Dribble Success %": 0.06, "G+A per 90": 0.06},
     },
 }
 
 PLAY_STYLE_PRETTY = {
-    "possession_high": "Positional / High Possession",
+    "possession_high":       "Positional / High Possession",
     "high_press_transition": "High Press & Transition",
-    "low_block_counter": "Low Block & Counter",
-    "crossing_wide": "Crossing / Wide Overloads",
+    "low_block_counter":     "Low Block & Counter",
+    "crossing_wide":         "Crossing / Wide Overloads",
 }
 
 # -----------------------------
@@ -296,11 +292,9 @@ def _blend_weights(base_w: Dict[str, float], sub_w: Optional[Dict[str, float]]) 
     return {k: v / total for k, v in out.items()}
 
 def _normalize_weights(W: Dict[str, float]) -> Dict[str, float]:
-    # Remove negatives and zero-out tiny values, then normalize.
     cleaned = {k: max(0.0, float(v)) for k, v in W.items()}
     total = sum(cleaned.values())
     if total <= 0:
-        # fallback uniform over original keys to avoid division by zero
         n = max(1, len(cleaned))
         return {k: 1.0 / n for k in cleaned}
     return {k: v / total for k, v in cleaned.items()}
@@ -320,10 +314,6 @@ def _apply_style_deltas(
     play_style: Optional[str],
     style_strength: float = 0.5,
 ) -> Dict[str, float]:
-    """
-    Additive deltas from PLAY_STYLE_PRESETS (scaled by style_strength), then re-normalize.
-    Keys applied in priority: exact role_label -> base -> "*" (if present).
-    """
     if not play_style or play_style not in PLAY_STYLE_PRESETS or style_strength <= 0:
         return W
 
@@ -331,7 +321,6 @@ def _apply_style_deltas(
     deltas: Dict[str, float] = {}
     presets = PLAY_STYLE_PRESETS[play_style]
 
-    # Merge in order of increasing priority
     for scope in ("*", base, role_label):
         d = presets.get(scope, {})
         if d:
@@ -384,7 +373,7 @@ def _score_from_weight_map(
     return GradeBreakdown(role=role_label, matched=matched, missing=missing, raw_score=raw, final_score=final)
 
 # -----------------------------
-# Public API (backward compat)
+# Public API
 # -----------------------------
 def compute_grade(
     scout_df: pd.DataFrame,
@@ -401,11 +390,6 @@ def compute_grade_with_playstyle(
     style_strength: float = 0.5,
     weights: Dict[str, Dict[str, float]] | None = None,
 ) -> GradeBreakdown:
-    """
-    Deterministic grade tailored to a team play style.
-    - play_style: one of PLAY_STYLE_PRESETS keys (e.g., 'possession_high').
-    - style_strength: 0..1 scaling for how strongly the style influences weights.
-    """
     role_label, W = _build_role_weights(role_hint, weights)
     W_styled = _apply_style_deltas(role_label, W, play_style, style_strength)
     return _score_from_weight_map(scout_df, W_styled, role_label)
@@ -417,10 +401,6 @@ def compute_grade_for_styles(
     style_strength: float = 0.5,
     weights: Dict[str, Dict[str, float]] | None = None,
 ) -> Dict[str, GradeBreakdown]:
-    """
-    Compute a GradeBreakdown for each play style name in `styles`.
-    Returns { style_name: GradeBreakdown }.
-    """
     out: Dict[str, GradeBreakdown] = {}
     for s in styles:
         out[s] = compute_grade_with_playstyle(
@@ -448,10 +428,6 @@ def compute_grade_for_positions_and_styles(
     style_strength: float = 0.5,
     weights: Dict[str, Dict[str, float]] | None = None,
 ) -> Dict[Tuple[str, str], GradeBreakdown]:
-    """
-    Matrix grading: for each (role, style) pair.
-    Returns { (role_label, style_name): GradeBreakdown }.
-    """
     out: Dict[Tuple[str, str], GradeBreakdown] = {}
     for base, sub in positions:
         role_hint = f"{base}:{sub}" if sub else base
@@ -506,7 +482,7 @@ def normalize_positions_from_profile(raw: str | list[str] | None) -> list[tuple[
 
     found: list[tuple[str, str | None]] = []
     seen = set()
-    joined = " " .join(tokens)
+    joined = " ".join(tokens)
     for alias, (base, sub) in ROLE_ALIASES.items():
         if f" {alias} " in f" {joined} ":
             key = (base, sub)
