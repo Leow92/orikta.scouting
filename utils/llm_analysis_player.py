@@ -2,150 +2,67 @@
 
 from __future__ import annotations
 from datetime import datetime
-from typing import Iterable
 import pandas as pd
 from requests.exceptions import ReadTimeout
-from utils.lang import _is_fr, _lang_block
-from requests.exceptions import ReadTimeout
+from utils.lang import _is_fr
 from utils.llm_client import _groq_chat
+from prompts.render import render
+from prompts.lang import glossary_block, role_guide, ROLE_CODE_MAP
 
-#OLLAMA_API_URL = "http://localhost:11434/api/chat"
-#OLLAMA_API_BASE = os.getenv("OLLAMA_API_BASE", "http://localhost:11434")
 
-# ----------------------------- #
-# Language utils & presentation #
-# ----------------------------- #
 def report_header() -> str:
     return f"Report generated on {datetime.now().strftime('%Y-%m-%d %H:%M')}"
 
+
 # ----------------------------- #
-# Glossary                      #
+# Role inference from metrics   #
 # ----------------------------- #
-SCOUT_METRIC_GLOSSARY_EN = {
-    "Non-Penalty Goals": "Goals scored excluding penalties",
-    "npxG": "Expected goals, non-penalty",
-    "xAG": "Expected assisted goals",
-    "Shots Total": "Total shots attempted",
-    "Shot-Creating Actions": "Actions leading to a shot",
-    "Passes Attempted": "Total passes attempted",
-    "Pass Completion %": "Percentage of passes completed",
-    "Progressive Passes": "Passes moving the ball significantly towards goal",
-    "Progressive Carries": "Carries moving the ball significantly towards goal",
-    "Successful Take-Ons": "Dribbles successfully beating an opponent",
-    "Touches (Att Pen)": "Touches in opponent’s penalty area",
-    "Tackles Won": "Tackles where possession was won",
-    "Interceptions": "Interceptions of opponent’s passes",
-    "Blocks": "Blocks of shots, passes, or crosses",
-    "Clearances": "Clearances from defensive area",
-    "Aerials Won": "Aerial duels won by the player",
-}
-SCOUT_METRIC_GLOSSARY_FR = {
-    "Non-Penalty Goals": "Buts marqués hors penalties",
-    "npxG": "Buts attendus hors penalty (expected goals, sans penalty)",
-    "xAG": "Passes décisives attendues (expected assisted goals)",
-    "Shots Total": "Tirs tentés au total",
-    "Shot-Creating Actions": "Actions menant à un tir",
-    "Passes Attempted": "Passes tentées au total",
-    "Pass Completion %": "Pourcentage de passes réussies",
-    "Progressive Passes": "Passes faisant progresser nettement vers le but",
-    "Progressive Carries": "Conduites de balle progressant nettement vers le but",
-    "Successful Take-Ons": "Dribbles réussis (adversaire éliminé)",
-    "Touches (Att Pen)": "Touches de balle dans la surface adverse",
-    "Tackles Won": "Tacles gagnés (possession récupérée)",
-    "Interceptions": "Interceptions de passes adverses",
-    "Blocks": "Contres de tirs, passes ou centres",
-    "Clearances": "Dégagements depuis la zone défensive",
-    "Aerials Won": "Duels aériens gagnés",
+_ROLE_HINTS = {
+    "gk": ["Save", "Goals Conceded", "Saves per 90", "Save %"],
+    "df": ["Tackles", "Interceptions", "Blocks", "Duels Won"],
+    "mf": ["Key Passes", "Pass Completion", "Dribbles", "Assists"],
+    "fw": ["Goals per 90", "G+A", "Shots per 90", "Shot Accuracy"],
 }
 
-def _glossary(language: str | None) -> dict[str, str]:
-    return SCOUT_METRIC_GLOSSARY_FR if _is_fr(language) else SCOUT_METRIC_GLOSSARY_EN
-
-# ----------------------------- #
-# Role hints & guides           #
-# ----------------------------- #
-ROLE_HINTS = {
-    "gk": [
-        "Save", "PSxG", "Crosses Stopped", "GA/90", "Launch%", "Avg Distance of Def Actions",
-        "Pass Completion % (Launched)", "Passes Attempted (Avg Len)"
-    ],
-    "df": ["Tackles", "Interceptions", "Clearances", "Blocks", "Dribblers Tackled", "Aerials", "Ball Recoveries"],
-    "mf": ["Progressive Passes", "Progressive Carries", "Pass Completion", "Shot-Creating Actions", "xAG"],
-    "fw": ["Non-Penalty Goals", "Shots Total", "npxG", "xG", "Touches (Att Pen)", "Progressive Passes Received", "Assists"],
-}
-
-ROLE_GUIDE_EN = {
-    "gk": "GK priority: shot-stopping (Save%, PSxG+/-/90), high claims/crosses, sweeping (Avg Def Action Dist). Distribution quality is secondary to core shot-stopping.",
-    "df": "DF priority: defending (Tackles, Int, Blocks, Clearances, Aerials), then build-up (Prog Passes, Pass Completion). Goals have very low weight.",
-    "mf": "MF priority: progression and circulation (Prog Passes/Carries, Pass Completion), chance creation (SCA, xAG). Goals are a bonus unless AM/SS.",
-    "fw": "FW priority: finishing volume & quality (Shots, npxG/xG, NPG), final-third presence (Touches Att Pen), chance creation (Assists/xAG) as secondary.",
-}
-ROLE_GUIDE_FR = {
-    "gk": "Priorité GB : arrêts (Save%, PSxG+/-/90), sorties aériennes, lecture/sweeper (distance des actions déf.). Relance = secondaire après l’arrêt.",
-    "df": "Priorité DEF : actions défensives (Tacles, Int, Blocks, Dégagements, Duels aériens), puis relance (Passes prog., % réussite). Les buts ont très peu de poids.",
-    "mf": "Priorité MIL : progression et circulation (Passes/Courses prog., % réussite), création (SCA, xAG). Les buts sont un plus sauf rôle très offensif.",
-    "fw": "Priorité ATT : volume/qualité de finition (Tirs, npxG/xG, buts hors pen.), présence zone décisive (Touches surface adv.), création = secondaire.",
-}
-
-def _role_guide(role: str, language: str | None) -> str:
-    return (ROLE_GUIDE_FR if _is_fr(language) else ROLE_GUIDE_EN).get(role, (ROLE_GUIDE_FR if _is_fr(language) else ROLE_GUIDE_EN)["mf"])
-
-ROLE_CODE_MAP = {"fw": "FW", "mf": "MF", "df": "DF", "gk": "GK"}
-
-# ----------------------------- #
-# Signal processing             #
-# ----------------------------- #
-def _infer_role_from_metrics(index_names: Iterable[str]) -> tuple[str, float]:
-    """
-    Heuristic (count substring hits) -> (role, confidence 0..1).
-    Defaults to ('mf', 0.25) on no signal.
-    """
+def _infer_role_from_metrics(index_names) -> tuple[str, float]:
     txt = [str(s).lower() for s in index_names]
     scores: dict[str, int] = {}
-    for role, keys in ROLE_HINTS.items():
-        rk = sum(sum(1 for s in txt if k.lower() in s) for k in keys)
-        scores[role] = rk
+    for role, keys in _ROLE_HINTS.items():
+        scores[role] = sum(sum(1 for s in txt if k.lower() in s) for k in keys)
     if not scores or all(v == 0 for v in scores.values()):
         return "mf", 0.25
-    role = max(scores, key=scores.get)
+    best = max(scores, key=scores.get)
     total = sum(scores.values()) or 1
-    conf = max(0.25, min(1.0, scores[role] / total))
-    return role, conf
+    return best, max(0.25, min(1.0, scores[best] / total))
 
-def _rank_signals(scout_df: pd.DataFrame, top_n: int = 8) -> tuple[list[tuple[str, float]], list[tuple[str, float]]]:
-    """
-    Return (top_list, bottom_list) of (metric, percentile) from the 'Percentile' column.
-    """
+
+# ----------------------------- #
+# Signal ranking                #
+# ----------------------------- #
+def _rank_signals(scout_df: pd.DataFrame, top_n: int = 8):
     if "Percentile" not in scout_df.columns:
         return [], []
     s = pd.to_numeric(scout_df["Percentile"], errors="coerce").dropna()
     if s.empty:
         return [], []
-    # s is a Series indexed by metric names
-    top = [(idx, float(val)) for idx, val in s.nlargest(top_n).items()]
-    bot = [(idx, float(val)) for idx, val in s.nsmallest(top_n).items()]
-    return top, bot
+    return (
+        [(idx, float(val)) for idx, val in s.nlargest(top_n).items()],
+        [(idx, float(val)) for idx, val in s.nsmallest(top_n).items()],
+    )
 
-# ----------------------------- #
-# Formatting helpers            #
-# ----------------------------- #
 def _fmt_pairs(pairs: list[tuple[str, float]]) -> str:
     return "\n".join(f"- {m} — {int(p)}p" for m, p in pairs) if pairs else "- —"
 
-def _fmt_drivers(drivers: list[tuple[str, float, float]] | None, max_n: int = 5) -> str:
+def _fmt_drivers(drivers, max_n: int = 5) -> str:
     if not drivers:
         return "- —"
-    out = []
-    for metric, weight, _contrib in drivers[:max_n]:
-        try:
-            w = f"{float(weight):.2f}"
-        except Exception:
-            w = str(weight)
-        out.append(f"- {metric} (w={w})")
-    return "\n".join(out) if out else "- —"
+    return "\n".join(
+        f"- {m} (w={float(w):.2f})" for m, w, *_ in drivers[:max_n]
+    )
+
 
 # ----------------------------- #
-# Main entry                    #
+# Main workflow                 #
 # ----------------------------- #
 def analyze_single_player_workflow(
     player: str,
@@ -156,237 +73,81 @@ def analyze_single_player_workflow(
     trend_block_md: str | None = None,
     presentation_md: str | None = None,
 ) -> str:
-    """
-    Multi-call LLM workflow:
-      1) Investment Verdict (grade + scouting + trends)
-      2) Scouting Analysis (scouting-only)
-      3) Performance Evolution (trends-only)
-      4) Tactical Fit (scouting + role)
-    Returns a stitched markdown block; never raises (returns an error string on failure).
-    """
     try:
-        # ---------- Prep: numeric safety + render sources ----------
         if "Percentile" in scout_df.columns:
             scout_df = scout_df.copy()
             scout_df["Percentile"] = pd.to_numeric(scout_df["Percentile"], errors="coerce")
 
-        table_md = scout_df.to_markdown()
-
-        if "Percentile" in scout_df.columns:
-            scout_pct_only = scout_df[["Percentile"]].copy()
-            scout_pct_only_md = scout_pct_only.to_markdown(tablefmt="pipe", index=True)
-        else:
-            # Fallback if Percentile missing (shouldn't happen in your pipeline)
-            scout_pct_only_md = "_No percentile data available_"
+        scout_pct_only_md = scout_df[["Percentile"]].to_markdown(tablefmt="pipe", index=True)
 
         # Glossary filtered to present metrics
-        gloss = _glossary(language)
         idx = [str(i) for i in scout_df.index]
-        present = [m for m in gloss if m in idx]
-        if present:
-            glossary_title = "### Scouting Metrics Glossary" if not _is_fr(language) else "### Glossaire des métriques de scouting"
-            glossary_md = "\n".join(f"- **{m}**: {gloss[m]}" for m in present)
-            glossary_block = f"\n{glossary_title}\n{glossary_md}\n"
-        else:
-            glossary_block = ""
+        glossary_block_str = glossary_block(language, idx)
 
         # Role inference + ranked signals
         role, conf = _infer_role_from_metrics(idx)
-        top_signals, bottom_signals = _rank_signals(scout_df, top_n=8)
-        top_signals_md = _fmt_pairs(top_signals)
+        top_signals, bottom_signals = _rank_signals(scout_df)
+        top_signals_md    = _fmt_pairs(top_signals)
         bottom_signals_md = _fmt_pairs(bottom_signals)
 
-        # Grade context strings
-        grade_role_str = None
-        drivers_md = missing_md = ""
+        # Grade context
+        grade_role_str = f"Detected role: {role.upper()} (confidence {conf:.2f})"
         if grade_ctx:
             raw_role = str(grade_ctx.get("role", "")).lower()
-            grade_role_str = ROLE_CODE_MAP.get(raw_role, str(grade_ctx.get("role", "")).upper() or "—")
-            drivers_md = _fmt_drivers(grade_ctx.get("drivers"))
-            missing_md = "\n".join(f"- {m}" for m in (grade_ctx.get("missing") or [])[:5]) or "- —"
-        # Fallback if no grade_ctx
-        if not grade_role_str:
-            grade_role_str = f"Detected role: {role.upper()} (confidence {conf:.2f})"
+            grade_role_str = ROLE_CODE_MAP.get(raw_role, raw_role.upper() or "—")
 
-        def _call_twice(prompt_text: str, language: str) -> str:
+        def _call(prompt: str) -> str:
             try:
-                return _groq_chat(prompt_text, language)
+                return _groq_chat(prompt, language)
             except ReadTimeout:
-                return _groq_chat(prompt_text, language)
+                return _groq_chat(prompt, language)
 
+        fallback = "donnée indisponible" if _is_fr(language) else "insufficient data"
 
-        # Build once, reuse for Prompts 2 & 4
-        scout_pct_only = scout_df[["Percentile"]].copy()
-        scout_pct_only_md = scout_pct_only.to_markdown(tablefmt="pipe", index=True)
+        # ---- Prompt 1: bullet scouting analysis ----
+        p_scouting = render(
+            "player_scouting.j2",
+            player=player,
+            role=role,
+            conf=conf,
+            role_guide_str=role_guide(role, language),
+            top_signals_md=top_signals_md,
+            bottom_signals_md=bottom_signals_md,
+            scout_pct_only_md=scout_pct_only_md,
+            glossary_block_str=glossary_block_str,
+            presentation_md=presentation_md or "",
+            grade_role_str=grade_role_str,
+            language=language,
+        )
+        scouting_md = _call(p_scouting) or fallback
 
-        # ---------- Prompt 2: Scouting Analysis (scouting only) ---------- 
-        prompt_scoutingv2 = f"""
-<role>  
-You are a tactical football analyst with expertise in player performance evaluation based on percentile-based scouting data.  
-</role>
+        # ---- Prompt 2: synthesis paragraphs ----
+        p_summary = render(
+            "player_summary.j2",
+            scout_pct_only_md=scout_pct_only_md,
+            multi_style_md=multi_style_md or "",
+            trend_block_md=trend_block_md or "",
+            scouting_md=scouting_md,
+            presentation_md=presentation_md or "",
+            language=language,
+        )
+        summary_md = _call(p_summary) or fallback
 
-<task>  
-Your task is to analyze {player}’s performance over the last 365 days using percentile-based scouting data and role, position context.  
-</task>
+        # ---- Assemble ----
+        if _is_fr(language):
+            title_scout   = "### 🧾 Analyse scouting"
+            title_summary = "### ♟️ Résumé Global"
+            title_analysis = "### 🧠 Analyse Poussée"
+        else:
+            title_scout   = "### 🧾 Scouting Analysis"
+            title_summary = "### ♟️ Overall Summary"
+            title_analysis = "### 🧠 Deep Analysis"
 
-<instructions>  
-Follow these steps:
-1. Read and interpret percentile values from the scouting summary.
-2. Rank and categorize metrics into:
-   - 🟢 Strengths — 3–4 items, ordered by *role priority**, then by *lowest percentile*.
-   - 🔴 Weaknesses — 2–3 items, ordered by *role priority*, then by *lowest percentile*.
-   - 🟡 Points to Improve — 2–3 actionable suggestions, ordered by *role priority* and *impact potential*.
-3. Write each bullet in this format:  
-   `*Metric — XXp*: short, role-specific note (≤ 18 words)`
-
-**Important Rules:**
-* Use only the provided scouting table (`Scouting Summary`).
-* Do not fabricate any values or interpret beyond the given data.
-* Cite percentile values using “XXp” (rounded).
-* Prioritize relevance to the player's role using the `Role priorities` guide.
-</instructions>
-
-<context>  
-- Player: {player}  
-- Detected role: **{role.upper()}** (confidence: {conf:.2f})  
-- Role priorities: {_role_guide(role, language)}  
-- Top metrics (helper list for ranking):  
-  {top_signals_md}  
-- Lowest metrics (helper list for ranking):  
-  {bottom_signals_md}  
-</context>
-
-<output-format> 
-First, provide a quick explanation of what is a percentile and what it means.
-
-Then, organize output into three clear sections using the following headers:  
-🟢 Strengths  
-
-- ...  
-- ...  
-
-🔴 Weaknesses  
-
-* ...
-* ...
-
-🟡 Points to Improve  
-
-* ...
-* ...
-</output-format>
-
-<user-input>  
-## Scouting Summary (last 365d)  
-{scout_pct_only_md}
-
-## Scouting Metrics Glossary  
-{glossary_block}
-
-## Presentation of the Player  
-{presentation_md}
-
-## Role Context Summary  
-{grade_role_str}  
-</user-input>
-  
-{_lang_block(language)}
-""".strip()
-
-        scouting_md = _call_twice(prompt_scoutingv2, language) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
-        
-        prompt_summaryv2 = f"""
-<role>  
-You are a professional football scout skilled in synthesizing structured data into clear, evaluative scouting reports for recruitment teams.  
-</role>
-
-<task>  
-Your task is to write a **Scouting Synthesis Text Analysis** (3–5 analytical paragraphs) for a player, based entirely on structured data provided in table format.  
-</task>
-
-<instructions>  
-Follow these steps:
-1. Carefully analyze the following structured inputs:
-   - `{{scouting_metrics_table}}`: Percentiles and per90 values across key metrics.
-   - `{{style_fit_matrix_table}}`: Fit scores showing player-role compatibility across tactical styles.
-   - `{{standard_stats_table}}`: Season-by-season stats (past two seasons).
-   - `{{scout_summary_points}}`: Bullet points of strengths, weaknesses, and areas for improvement.
-   - `{{presentation_player}}`: Player profile introduction.
-
-2. Write a 3–5 paragraph scouting synthesis. Your analysis must:
-
-   * Present the player's **technical, tactical, physical**, and **mental** traits.
-   * Reference key metrics using **percentiles (e.g., “87p”)** or **per90 values** when relevant.
-   * Highlight standout strengths and critical weaknesses.
-   * Discuss the player’s **positional versatility** and **fit within tactical systems**.
-   * Analyze **trends across seasons** from the standard stats table.
-   * Integrate insights from `{{scout_summary_points}}` smoothly into the narrative.
-   * Conclude with a **Summary Projection** indicating:
-
-     * Optimal role/system.
-     * Competitive level suited for.
-     * Conditions needed to maximize the player’s impact.
-
-3. **Style & Constraints**:
-
-   * Write in a **concise, professional, and decision-oriented tone**.
-   * Avoid restating tables — interpret, compare, and synthesize insights for a recruitment audience.
-   * Do not invent any values or extrapolate beyond the given data.
-
-</instructions>
-
-<output-format>  
-Structure your output in **five short paragraphs** as follows:  
-```
-1️⃣ Overview and player identity (position, key traits, basic style).  
-2️⃣ Attacking and creative attributes (key metrics + interpretation).  
-3️⃣ Defensive and physical qualities, limitations or gaps.  
-4️⃣ Tactical fit: roles, formations, and adaptability.  
-5️⃣ Summary Projection: optimal level, usage, development conditions.  
-```  
-</output-format>
-
-<user-input>  
-{{scouting_metrics_table}}:  
-{scout_pct_only_md}
-
-{{style_fit_matrix_table}}:
-{multi_style_md}
-
-{{standard_stats_table}}:
-{trend_block_md}
-
-{{scout_summary_points}}:
-{scouting_md}
-
-{{presentation_player}}:
-{presentation_md}
-</user-input>
-
-{_lang_block(language)} 
-""".strip()
-        
-        summary_md = _call_twice(prompt_summaryv2, language) or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
-
-        # ---------- Assemble final markdown ----------
-        #title_verdict = "### 💼 Verdict" if not _is_fr(language) else "### 💼 Verdict"
-        title_scout = "### 🧾 Scouting Analysis" if not _is_fr(language) else "### 🧾 Analyse scouting"
-        #title_trend = "### 📈 Performance Evolution" if not _is_fr(language) else "### 📈 Évolution des performances"
-        #title_tactic = "### ♟️ Tactical Fit" if not _is_fr(language) else "### ♟️ Adaptation tactique"
-        title_summary = "### ♟️ Overall Summary" if not _is_fr(language) else "### ♟️ Résumé Global"
-
-        title_analysis = "### 🧠 Deep Analysis" if not _is_fr(language) else "### 🧠 Analyse Poussée"
-
-        final_md = (
+        return (
             f"{title_analysis}\n\n"
-            #f"{title_verdict}\n\n{verdict_md}\n\n---\n\n"
             f"{title_scout}\n\n{scouting_md}\n\n---\n\n"
-            #f"{title_trend}\n\n{trends_md}\n\n---\n\n"
-            #f"{title_tactic}\n\n{tactical_md}\n\n---\n\n"
             f"{title_summary}\n\n{summary_md}"
         )
-
-        return final_md or ("insufficient data" if not _is_fr(language) else "donnée indisponible")
 
     except Exception as e:
         return f"⚠️ LLM analysis failed: {e}"

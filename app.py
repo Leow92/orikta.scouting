@@ -2,10 +2,8 @@
 
 import time
 import streamlit as st
-from agents.router import route_command
-from utils.prompt_parser import parse_prompt
+from agents.router import route_query
 from ui.branding import footer_brand
-#from tools.grading import PLAY_STYLE_PRESETS, PLAY_STYLE_PRETTY
 
 # ---------------- UI Strings (EN/FR) ---------------- #
 UI_STRINGS = {
@@ -141,45 +139,29 @@ with st.form(key="query_form", clear_on_submit=False):
 # -------- Run pipeline on submit --------
 if submitted and user_input and user_input != st.session_state.last_prompt:
     st.session_state.last_prompt = user_input
+    st.session_state["_orikta_fast_preview"] = fast_preview
+    st.session_state["_orikta_verbose"] = verbose
 
-    parsed = parse_prompt(user_input)  # -> {"tool": "analyze"/"compare", "players": [...]}
-    tool = parsed.get("tool")
-    players = parsed.get("players", [])
+    with st.spinner(_t("spinner")):
+        t0 = time.time()
+        try:
+            response, detected_lang = route_query(user_input, skip_llm=fast_preview)
+            elapsed = time.time() - t0
 
-    if tool:
-        with st.spinner(_t("spinner")):
-            # Persist UI options
-            #st.session_state["_orikta_styles"] = styles
-            #st.session_state["_orikta_style_strength"] = style_strength
-            st.session_state["_orikta_fast_preview"] = fast_preview
-            st.session_state["_orikta_verbose"] = verbose
+            # Update session language to match what the router detected
+            st.session_state.language = detected_lang
 
-            t0 = time.time()
-            try:
-                response = route_command(
-                    {"command": tool, "args": players},
-                    language=language,
-                    #styles=styles,
-                    #style_strength=style_strength,
-                    skip_llm=fast_preview
-                )
-                elapsed = time.time() - t0
-
-                st.session_state.history.insert(0, {
-                    "prompt": user_input,
-                    "response": response,
-                    "elapsed": elapsed,
-                    "language": language,
-                    #"styles": styles,
-                    #"style_strength": style_strength,
-                    "skip_llm": fast_preview,
-                })
-                st.session_state.selected_history_index = 0
-            except Exception as e:
-                st.session_state.history.insert(0, {"prompt": user_input, "response": f"⚠️ Error: {e}"})
-                st.session_state.selected_history_index = 0
-    else:
-        st.warning("🤖 I couldn’t detect whether you want to **analyze** or **compare**. Try: `Analyze: Player Name`.")
+            st.session_state.history.insert(0, {
+                "prompt": user_input,
+                "response": response,
+                "elapsed": elapsed,
+                "language": detected_lang,
+                "skip_llm": fast_preview,
+            })
+            st.session_state.selected_history_index = 0
+        except Exception as e:
+            st.session_state.history.insert(0, {"prompt": user_input, "response": f"⚠️ Error: {e}"})
+            st.session_state.selected_history_index = 0
 
 # -------- Sidebar: History --------
 with st.sidebar:

@@ -83,20 +83,49 @@ def _search_in_league(name: str, league_id: int, season: int) -> list[dict]:
     data = _get("players", {"search": name, "league": league_id, "season": season})
     return data.get("response", [])
 
+def _search_variants(name: str) -> list[str]:
+    """Generate search variants to handle API-football's abbreviated name format.
+
+    API-football stores players as "O. Dembélé" (initial + last name), so a
+    full first+last query like "ousmane dembélé" never matches.  We try:
+      1. The original string (works for single-word queries like "Bellingham")
+      2. The last word only — usually the last name ("dembélé")
+      3. Accent-stripped last name ("dembele") — handles API inconsistencies
+      4. Accent-stripped full name ("ousmane dembele")
+    """
+    import unicodedata
+
+    def _strip(s: str) -> str:
+        return unicodedata.normalize("NFKD", s).encode("ASCII", "ignore").decode().strip()
+
+    parts   = name.strip().split()
+    last    = parts[-1] if parts else name
+    last_stripped  = _strip(last)
+    full_stripped  = _strip(name)
+
+    seen, variants = set(), []
+    for v in [name, last, last_stripped, full_stripped]:
+        if v and v not in seen:
+            seen.add(v)
+            variants.append(v)
+    return variants
+
+
 def search_player(name: str, season: int | None = None) -> list[dict]:
     """Search for a player by name across major leagues.
 
     The free plan requires a league+season context for name searches.
-    Iterates over SEARCH_LEAGUES and returns results from the first league
-    that yields a match.  Results per league are cached individually.
+    Tries multiple name variants (full name, last name, accent-stripped)
+    before moving to the next league.  All calls are cached individually.
     """
     if season is None:
         season = current_season()
 
-    for league_id in SEARCH_LEAGUES:
-        results = _search_in_league(name, league_id, season)
-        if results:
-            return results
+    for search_name in _search_variants(name):
+        for league_id in SEARCH_LEAGUES:
+            results = _search_in_league(search_name, league_id, season)
+            if results:
+                return results
     return []
 
 
