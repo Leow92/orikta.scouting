@@ -40,6 +40,20 @@ def _t(en: str, fr: str, language: str) -> str:
 def _nodata(language: str) -> str:
     return "donnée indisponible" if _is_fr(language) else "insufficient data"
 
+def _player_card_html(url: str, name: str, accent: str = "#4CAF50") -> str:
+    img = (
+        f'<img src="{url}" width="88" height="88" '
+        f'style="border-radius:50%;object-fit:cover;border:3px solid {accent};">'
+        if url else
+        f'<div style="width:88px;height:88px;border-radius:50%;background:{accent}22;'
+        f'border:3px solid {accent};display:inline-flex;align-items:center;'
+        f'justify-content:center;font-size:2em;">⚽</div>'
+    )
+    return (
+        f'<div style="text-align:center;">{img}'
+        f'<br><b style="font-size:.9em;">{name}</b></div>'
+    )
+
 # ------------------------------------------------------------------ #
 # Trend analysis (API-football season-over-season)                    #
 # ------------------------------------------------------------------ #
@@ -325,7 +339,10 @@ def analyze_player(
         presentation_md = _profile_table_md(full_name, items, language)
 
         photo_url = player_info.get("photo")
-        player_photo_html = f"![{full_name}]({photo_url})" if photo_url else ""
+        player_photo_html = (
+            f'<div style="margin:12px 0 20px;">{_player_card_html(photo_url, full_name)}</div>'
+            if photo_url else ""
+        )
 
         # ---- 5. Determine positions ----
         pos_raw = position_str
@@ -495,6 +512,7 @@ def analyze_player(
         pipeline_log.log("[analyze] Report generation complete", level="success")
         return _md(f"""
 {player_photo_html}
+{SEPARATOR}
 {presentation_md}
 {spider_graph_html}
 {SEPARATOR}

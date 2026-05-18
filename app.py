@@ -211,10 +211,10 @@ def display_report(report_md: str):
         plotly_html, post = rest.split(END, 1)
 
         if pre.strip():
-            st.markdown(pre)
+            st.markdown(pre, unsafe_allow_html=True)
         st.components.v1.html(plotly_html, height=520, scrolling=False)
         if post.strip():
-            st.markdown(post)
+            st.markdown(post, unsafe_allow_html=True)
         return
 
     # Fallback to the heuristic if markers are missing:
@@ -225,12 +225,12 @@ def display_report(report_md: str):
         second_close = s.find('</script>', first_close + 9) if first_close != -1 else -1
         end = (second_close + 9) if second_close != -1 else (first_close + 9 if first_close != -1 else -1)
         if end != -1:
-            st.markdown(s[:start])
+            st.markdown(s[:start], unsafe_allow_html=True)
             st.components.v1.html(s[start:end], height=520, scrolling=False)
-            st.markdown(s[end:])
+            st.markdown(s[end:], unsafe_allow_html=True)
             return
 
-    st.markdown(report_md)
+    st.markdown(report_md, unsafe_allow_html=True)
 
 def md_to_html(md_text: str, title: str = "orikta Report") -> str:
         try:

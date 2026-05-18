@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Callable
 from utils.lang import _is_fr
 from prompts.render import render
+import utils.pipeline_log as pipeline_log
 
 
 def compare_llm_workflow(
@@ -26,45 +27,34 @@ def compare_llm_workflow(
 ) -> str:
     fallback = "donnée indisponible" if _is_fr(language) else "insufficient data"
 
-    shared = dict(
+    prompt = render(
+        "comparison_deep.j2",
         A_name=A_name,
         B_name=B_name,
         role_label=role_label,
+        style_label=style_label,
+        style_influence=style_influence,
         scout_md_A=scout_md_A,
         scout_md_B=scout_md_B,
+        trend_md_A=trend_md_A,
+        trend_md_B=trend_md_B,
+        style_rows_md=style_rows_md,
+        aligned_diff_md=aligned_diff_md,
+        similarity_0_100=similarity_0_100,
         glossary_block=glossary_block,
         language=language,
     )
 
-    p_verdict = render(
-        "comparison_verdict.j2",
-        style_label=style_label,
-        style_influence=style_influence,
-        similarity_0_100=similarity_0_100,
-        style_rows_md=style_rows_md,
-        trend_md_A=trend_md_A,
-        trend_md_B=trend_md_B,
-        **shared,
-    )
-
-    p_diff = render(
-        "comparison_diff.j2",
-        aligned_diff_md=aligned_diff_md,
-        **shared,
-    )
-
-    exec_md  = call_fn(p_verdict, language) or fallback
-    scout_md = call_fn(p_diff,    language) or fallback
+    pipeline_log.log(f"[compare_llm] Prompt length: {len(prompt)} chars — calling LLM…")
+    analysis_md = call_fn(prompt, language) or fallback
+    if analysis_md == fallback:
+        pipeline_log.log("[compare_llm] LLM returned empty — using fallback", level="warning")
+    else:
+        pipeline_log.log(f"[compare_llm] LLM response received ({len(analysis_md)} chars)", level="success")
 
     if _is_fr(language):
-        title_exec = f"### 💼 Verdict — {A_name} vs {B_name}"
-        title_h2h  = f"### 🧾 Analyse comparée — {A_name} vs {B_name}"
+        title = f"### 🧠 Analyse comparative — {A_name} vs {B_name}"
     else:
-        title_exec = f"### 💼 Executive Verdict — {A_name} vs {B_name}"
-        title_h2h  = f"### 🧾 Head-to-Head Scouting — {A_name} vs {B_name}"
+        title = f"### 🧠 Deep Scouting Analysis — {A_name} vs {B_name}"
 
-    return (
-        "### 🧠 LLM Comparison\n\n"
-        f"{title_exec}\n\n{exec_md}\n\n---\n\n"
-        f"{title_h2h}\n\n{scout_md}\n\n---\n\n"
-    )
+    return f"{title}\n\n{analysis_md}\n\n---\n\n"

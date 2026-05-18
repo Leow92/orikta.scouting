@@ -12,7 +12,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 # Initialize Groq client
 _client = Groq(api_key=GROQ_API_KEY)
-model_chosen = "openai/gpt-oss-20b"
+model_chosen = "openai/gpt-oss-120b"
 
 def _groq_chat(user_content: str, language: str, model= model_chosen) -> str:
     """
@@ -33,11 +33,31 @@ def _groq_chat(user_content: str, language: str, model= model_chosen) -> str:
         )
 
         chunks = []
+        event_count = 0
         for event in stream:
+            event_count += 1
             if event.choices and event.choices[0].delta and event.choices[0].delta.content:
                 chunks.append(event.choices[0].delta.content)
 
-        return "".join(chunks).strip()
+        result = "".join(chunks).strip()
+        if not result:
+            # Reasoning models (e.g. openai/gpt-oss-20b) emit tokens in
+            # delta.reasoning_content during thinking and may produce no
+            # delta.content — retry without streaming to get the final answer.
+            resp = _client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": _lang_block(language)},
+                    {"role": "user", "content": user_content},
+                ],
+                temperature=1,
+                stream=False,
+            )
+            result = (resp.choices[0].message.content or "").strip()
+
+        if not result:
+            return f"⚠️ LLM returned empty response ({event_count} stream events, model={model})"
+        return result
 
     except ReadTimeout:
         # Retry once if Groq takes too long
