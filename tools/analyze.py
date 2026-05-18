@@ -138,8 +138,8 @@ def _season_stats_md(
         return _nodata(language)
 
     title = _t(
-        f"### 📚 Season Stats ({current_season_year - 1}–{current_season_year} vs {current_season_year - 2}–{current_season_year - 1})",
-        f"### 📚 Stats de saison ({current_season_year - 1}–{current_season_year} vs {current_season_year - 2}–{current_season_year - 1})",
+        f"### 📚 Season Stats ({current_season_year}–{current_season_year + 1} vs {current_season_year - 1}–{current_season_year})",
+        f"### 📚 Stats de saison ({current_season_year}–{current_season_year + 1} vs {current_season_year - 1}–{current_season_year})",
         language,
     )
 
@@ -291,6 +291,7 @@ def analyze_player(
         return f"❌ Could not identify a best match for: **{query_name}**."
 
     player_info = player_obj.get("player") or {}
+    photo_url = player_info.get("photo")
     full_name = player_info.get("name") or query_name.title()
     player_id = player_info.get("id")
     _log(f"✅ Matched player: {full_name} (id={player_id})")
@@ -309,15 +310,24 @@ def analyze_player(
         if league_id:
             _log(f"📡 Fetching league pool: league_id={league_id}, season={season}")
             pool = get_league_players(league_id, season, max_pages=5)
-        _log(f"📊 Pool size: {len(pool)} players")
-
-        # ---- 3. Build scout_df ----
-        scout_df = build_scout_df(player_obj, pool, position_filter=position_str)
+            if not pool:
+                _log(f"⚠️ No league data available for {league_name} (season {season}). Using empty pool.")
+                # Fallback: Use empty pool and skip percentiles
+                scout_df = build_scout_df(player_obj, [], position_filter=position_str)
+            else:
+                _log(f"📊 Pool size: {len(pool)} players")
+                scout_df = build_scout_df(player_obj, pool, position_filter=position_str)
+        else:
+            _log(f"⚠️ No league_id available for {full_name}. Using empty pool.")
+            scout_df = build_scout_df(player_obj, [], position_filter=position_str)
 
         # ---- 4. Build profile ----
         profile = build_profile(player_obj)
         items = _merge_profile_items(profile)
         presentation_md = _profile_table_md(full_name, items, language)
+
+        photo_url = player_info.get("photo")
+        player_photo_html = f"![{full_name}]({photo_url})" if photo_url else ""
 
         # ---- 5. Determine positions ----
         pos_raw = position_str
@@ -409,8 +419,8 @@ def analyze_player(
         display_df = scout_df[["Per90", "Percentile"]].copy()
         display_df["Percentile"] = pd.to_numeric(display_df["Percentile"], errors="coerce")
         scout_md_title = _t(
-            f"### 🧾 Scouting Report — {league_name} {season}",
-            f"### 🧾 Rapport de scouting — {league_name} {season}",
+            f"### 🧾 Scouting Report — {league_name} {season}–{season + 1}",
+            f"### 🧾 Rapport de scouting — {league_name} {season}–{season + 1}",
             language,
         )
         scout_md = display_df.to_markdown(tablefmt="pipe", index=True)
@@ -441,6 +451,7 @@ def analyze_player(
             _log("⚡ Fast preview: skipping LLM.")
             print("✅ Report Generation Done.")
             return _md(f"""
+{player_photo_html}
 {presentation_md}
 {spider_graph_html}
 {SEPARATOR}
@@ -479,6 +490,7 @@ def analyze_player(
 
         print("✅ Report Generation Done.")
         return _md(f"""
+{player_photo_html}
 {presentation_md}
 {spider_graph_html}
 {SEPARATOR}

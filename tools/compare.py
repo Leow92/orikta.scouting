@@ -23,7 +23,8 @@ from tools.grading import (
     PLAY_STYLE_PRESETS, PLAY_STYLE_PRETTY,
 )
 from utils.llm_analysis_comparison import compare_llm_workflow
-from utils.lang import _is_fr, _lang_block, _glossary_block_for
+from utils.lang import _is_fr
+from prompts.lang import glossary_block as _glossary_block_for
 from ui.graph import create_spider_graph_duo
 from requests.exceptions import ReadTimeout
 from utils.llm_client import _groq_chat

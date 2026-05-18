@@ -3,7 +3,7 @@
 from dotenv import load_dotenv
 import os
 from groq import Groq
-from utils.lang import _lang_block
+from prompts.lang import lang_constraint as _lang_block
 from requests.exceptions import ReadTimeout
 
 # Load .env file
