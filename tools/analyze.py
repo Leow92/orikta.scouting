@@ -56,23 +56,6 @@ TREND_CANDIDATES = [
     "Shots per 90", "Shot Accuracy %",
 ]
 
-def _get_available_metrics(player_obj: dict) -> list[str]:
-    """Extract all available per-90/percentage metrics from a player's stats."""
-    entry = best_stats_entry(player_obj)
-    if not entry:
-        return []
-    metrics = []
-    for key in ["goals", "passes", "tackles", "dribbles", "duels", "shots"]:
-        if key in entry:
-            subkeys = entry[key].keys()
-            for subkey in subkeys:
-                if subkey in ["total", "accuracy", "success", "won"]:
-                    metric_name = f"{key.capitalize()} {subkey.capitalize()}"
-                    if subkey == "total":
-                        metric_name += " per 90"  # Assume per-90 is derived
-                    metrics.append(metric_name)
-    return metrics
-
 def _trend_threshold(col: str) -> float:
     c = col.lower()
     if "%" in c:
@@ -102,14 +85,10 @@ def build_trend_block_for_llm(
     current_metrics: dict[str, float],
     prev_metrics: dict[str, float],
     language: str,
-    player_obj: dict | None = None,  # NEW: Accept player_obj to extract metrics
 ) -> tuple[str, dict]:
     """Compute number-free LLM trend block from two seasons of per-90 metric dicts."""
-    # Use dynamic metrics if player_obj is provided, else fall back to TREND_CANDIDATES
-    trend_candidates = _get_available_metrics(player_obj) if player_obj else TREND_CANDIDATES
-
     deltas: dict[str, float] = {}
-    for col in trend_candidates:  # Use dynamic list
+    for col in TREND_CANDIDATES:
         curr = current_metrics.get(col)
         prev = prev_metrics.get(col)
         if curr is not None and prev is not None:
@@ -154,19 +133,17 @@ def _season_stats_md(
     prev_metrics: dict[str, float],
     current_season_year: int,
     language: str,
-    player_obj: dict | None = None,  # NEW: Accept player_obj to extract metrics
 ) -> str:
     if not current_metrics:
         return _nodata(language)
 
     title = _t(
-        f"### 📚 Season Stats ({current_season_year - 1}–{current_season_year} vs {current_season_year - 2}–{current_season_year - 1})",
-        f"### 📚 Stats de saison ({current_season_year - 1}–{current_season_year} vs {current_season_year - 2}–{current_season_year - 1})",
+        f"### 📚 Season Stats ({current_season_year}–{current_season_year + 1} vs {current_season_year - 1}–{current_season_year})",
+        f"### 📚 Stats de saison ({current_season_year}–{current_season_year + 1} vs {current_season_year - 1}–{current_season_year})",
         language,
     )
 
-    # Use dynamic metrics if player_obj is provided, else fall back to preferred
-    preferred = _get_available_metrics(player_obj) if player_obj else [
+    preferred = [
         "Goals per 90", "Assists per 90", "G+A per 90",
         "Shots per 90", "Shot Accuracy %",
         "Key Passes per 90", "Pass Completion %",
@@ -442,8 +419,8 @@ def analyze_player(
         display_df = scout_df[["Per90", "Percentile"]].copy()
         display_df["Percentile"] = pd.to_numeric(display_df["Percentile"], errors="coerce")
         scout_md_title = _t(
-            f"### 🧾 Scouting Report — {league_name} {season}",
-            f"### 🧾 Rapport de scouting — {league_name} {season}",
+            f"### 🧾 Scouting Report — {league_name} {season}–{season + 1}",
+            f"### 🧾 Rapport de scouting — {league_name} {season}–{season + 1}",
             language,
         )
         scout_md = display_df.to_markdown(tablefmt="pipe", index=True)
@@ -453,8 +430,8 @@ def analyze_player(
         prev_obj = prev_player_objs[0] if prev_player_objs else None
         current_metrics, prev_metrics = build_season_comparison(player_obj, prev_obj)
 
-        std2_md = _season_stats_md(current_metrics, prev_metrics, season, language, player_obj)
-        trend_block_md, _ = build_trend_block_for_llm(current_metrics, prev_metrics, language, player_obj)
+        std2_md = _season_stats_md(current_metrics, prev_metrics, season, language)
+        trend_block_md, _ = build_trend_block_for_llm(current_metrics, prev_metrics, language)
 
         # ---- 11. Spider graph ----
         if "Percentile" in scout_df.columns:
