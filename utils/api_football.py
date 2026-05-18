@@ -47,6 +47,19 @@ def current_season() -> int:
     today = date.today()
     return today.year - 1 if today.month < 7 else today.year
 
+@st.cache_data(ttl=24 * 3600)
+def get_player_seasons(player_id: int, seasons: list[int]) -> dict[int, list[dict]]:
+    """Fetch a player's stats for multiple seasons in one call."""
+    return {season: get_player_by_id(player_id, season) for season in seasons}
+
+def get_player_comparison(player_id: int) -> dict:
+    """Helper to fetch current + last season stats for a player."""
+    current = current_season()
+    last = current - 1
+    return {
+        "current": get_player_by_id(player_id, current),
+        "last": get_player_by_id(player_id, last),
+    }
 
 # ------------------------------------------------------------------ #
 # Internal HTTP helper                                                 #

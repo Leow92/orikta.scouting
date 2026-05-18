@@ -56,6 +56,23 @@ TREND_CANDIDATES = [
     "Shots per 90", "Shot Accuracy %",
 ]
 
+def _get_available_metrics(player_obj: dict) -> list[str]:
+    """Extract all available per-90/percentage metrics from a player's stats."""
+    entry = best_stats_entry(player_obj)
+    if not entry:
+        return []
+    metrics = []
+    for key in ["goals", "passes", "tackles", "dribbles", "duels", "shots"]:
+        if key in entry:
+            subkeys = entry[key].keys()
+            for subkey in subkeys:
+                if subkey in ["total", "accuracy", "success", "won"]:
+                    metric_name = f"{key.capitalize()} {subkey.capitalize()}"
+                    if subkey == "total":
+                        metric_name += " per 90"  # Assume per-90 is derived
+                    metrics.append(metric_name)
+    return metrics
+
 def _trend_threshold(col: str) -> float:
     c = col.lower()
     if "%" in c:
@@ -85,10 +102,14 @@ def build_trend_block_for_llm(
     current_metrics: dict[str, float],
     prev_metrics: dict[str, float],
     language: str,
+    player_obj: dict | None = None,  # NEW: Accept player_obj to extract metrics
 ) -> tuple[str, dict]:
     """Compute number-free LLM trend block from two seasons of per-90 metric dicts."""
+    # Use dynamic metrics if player_obj is provided, else fall back to TREND_CANDIDATES
+    trend_candidates = _get_available_metrics(player_obj) if player_obj else TREND_CANDIDATES
+
     deltas: dict[str, float] = {}
-    for col in TREND_CANDIDATES:
+    for col in trend_candidates:  # Use dynamic list
         curr = current_metrics.get(col)
         prev = prev_metrics.get(col)
         if curr is not None and prev is not None:
@@ -133,6 +154,7 @@ def _season_stats_md(
     prev_metrics: dict[str, float],
     current_season_year: int,
     language: str,
+    player_obj: dict | None = None,  # NEW: Accept player_obj to extract metrics
 ) -> str:
     if not current_metrics:
         return _nodata(language)
@@ -143,7 +165,8 @@ def _season_stats_md(
         language,
     )
 
-    preferred = [
+    # Use dynamic metrics if player_obj is provided, else fall back to preferred
+    preferred = _get_available_metrics(player_obj) if player_obj else [
         "Goals per 90", "Assists per 90", "G+A per 90",
         "Shots per 90", "Shot Accuracy %",
         "Key Passes per 90", "Pass Completion %",
@@ -291,6 +314,7 @@ def analyze_player(
         return f"❌ Could not identify a best match for: **{query_name}**."
 
     player_info = player_obj.get("player") or {}
+    photo_url = player_info.get("photo")
     full_name = player_info.get("name") or query_name.title()
     player_id = player_info.get("id")
     _log(f"✅ Matched player: {full_name} (id={player_id})")
@@ -309,15 +333,24 @@ def analyze_player(
         if league_id:
             _log(f"📡 Fetching league pool: league_id={league_id}, season={season}")
             pool = get_league_players(league_id, season, max_pages=5)
-        _log(f"📊 Pool size: {len(pool)} players")
-
-        # ---- 3. Build scout_df ----
-        scout_df = build_scout_df(player_obj, pool, position_filter=position_str)
+            if not pool:
+                _log(f"⚠️ No league data available for {league_name} (season {season}). Using empty pool.")
+                # Fallback: Use empty pool and skip percentiles
+                scout_df = build_scout_df(player_obj, [], position_filter=position_str)
+            else:
+                _log(f"📊 Pool size: {len(pool)} players")
+                scout_df = build_scout_df(player_obj, pool, position_filter=position_str)
+        else:
+            _log(f"⚠️ No league_id available for {full_name}. Using empty pool.")
+            scout_df = build_scout_df(player_obj, [], position_filter=position_str)
 
         # ---- 4. Build profile ----
         profile = build_profile(player_obj)
         items = _merge_profile_items(profile)
         presentation_md = _profile_table_md(full_name, items, language)
+
+        photo_url = player_info.get("photo")
+        player_photo_html = f"![{full_name}]({photo_url})" if photo_url else ""
 
         # ---- 5. Determine positions ----
         pos_raw = position_str
@@ -420,8 +453,8 @@ def analyze_player(
         prev_obj = prev_player_objs[0] if prev_player_objs else None
         current_metrics, prev_metrics = build_season_comparison(player_obj, prev_obj)
 
-        std2_md = _season_stats_md(current_metrics, prev_metrics, season, language)
-        trend_block_md, _ = build_trend_block_for_llm(current_metrics, prev_metrics, language)
+        std2_md = _season_stats_md(current_metrics, prev_metrics, season, language, player_obj)
+        trend_block_md, _ = build_trend_block_for_llm(current_metrics, prev_metrics, language, player_obj)
 
         # ---- 11. Spider graph ----
         if "Percentile" in scout_df.columns:
@@ -441,6 +474,7 @@ def analyze_player(
             _log("⚡ Fast preview: skipping LLM.")
             print("✅ Report Generation Done.")
             return _md(f"""
+{player_photo_html}
 {presentation_md}
 {spider_graph_html}
 {SEPARATOR}
@@ -479,6 +513,7 @@ def analyze_player(
 
         print("✅ Report Generation Done.")
         return _md(f"""
+{player_photo_html}
 {presentation_md}
 {spider_graph_html}
 {SEPARATOR}

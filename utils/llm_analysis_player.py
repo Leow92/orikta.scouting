@@ -105,7 +105,7 @@ def analyze_single_player_workflow(
         fallback = "donnée indisponible" if _is_fr(language) else "insufficient data"
 
         # ---- Prompt 1: bullet scouting analysis ----
-        p_scouting = render(
+        """ p_scouting = render(
             "player_scouting.j2",
             player=player,
             role=role,
@@ -119,7 +119,7 @@ def analyze_single_player_workflow(
             grade_role_str=grade_role_str,
             language=language,
         )
-        scouting_md = _call(p_scouting) or fallback
+        scouting_md = _call(p_scouting) or fallback """
 
         # ---- Prompt 2: synthesis paragraphs ----
         p_summary = render(
@@ -127,7 +127,6 @@ def analyze_single_player_workflow(
             scout_pct_only_md=scout_pct_only_md,
             multi_style_md=multi_style_md or "",
             trend_block_md=trend_block_md or "",
-            scouting_md=scouting_md,
             presentation_md=presentation_md or "",
             language=language,
         )
@@ -135,17 +134,14 @@ def analyze_single_player_workflow(
 
         # ---- Assemble ----
         if _is_fr(language):
-            title_scout   = "### 🧾 Analyse scouting"
-            title_summary = "### ♟️ Résumé Global"
-            title_analysis = "### 🧠 Analyse Poussée"
+            title_summary = "### Résumé Global"
+            title_analysis = "### Analyse Poussée"
         else:
-            title_scout   = "### 🧾 Scouting Analysis"
-            title_summary = "### ♟️ Overall Summary"
-            title_analysis = "### 🧠 Deep Analysis"
+            title_summary = "### Overall Summary"
+            title_analysis = "### Deep Analysis"
 
         return (
             f"{title_analysis}\n\n"
-            f"{title_scout}\n\n{scouting_md}\n\n---\n\n"
             f"{title_summary}\n\n{summary_md}"
         )
 
