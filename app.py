@@ -4,6 +4,7 @@ import time
 import streamlit as st
 from agents.router import route_query
 from ui.branding import footer_brand
+import utils.pipeline_log as pipeline_log
 
 # ---------------- UI Strings (EN/FR) ---------------- #
 UI_STRINGS = {
@@ -144,6 +145,7 @@ if submitted and user_input and user_input != st.session_state.last_prompt:
 
     with st.spinner(_t("spinner")):
         t0 = time.time()
+        pipeline_log.reset()
         try:
             response, detected_lang = route_query(user_input, skip_llm=fast_preview)
             elapsed = time.time() - t0
@@ -157,10 +159,15 @@ if submitted and user_input and user_input != st.session_state.last_prompt:
                 "elapsed": elapsed,
                 "language": detected_lang,
                 "skip_llm": fast_preview,
+                "logs": pipeline_log.get_logs(),
             })
             st.session_state.selected_history_index = 0
         except Exception as e:
-            st.session_state.history.insert(0, {"prompt": user_input, "response": f"⚠️ Error: {e}"})
+            st.session_state.history.insert(0, {
+                "prompt": user_input,
+                "response": f"⚠️ Error: {e}",
+                "logs": pipeline_log.get_logs(),
+            })
             st.session_state.selected_history_index = 0
 
 # -------- Sidebar: History --------
@@ -178,6 +185,23 @@ with st.sidebar:
         st.session_state.selected_history_index = prompt_options.index(sel)
     else:
         st.info(_t("sidebar_history_empty"))
+
+_LEVEL_ICON = {
+    "info":    "ℹ️",
+    "success": "✅",
+    "warning": "⚠️",
+    "error":   "❌",
+}
+
+def display_pipeline_logs(logs, expanded: bool = False) -> None:
+    if not logs:
+        return
+    with st.expander("🪵 Pipeline logs", expanded=expanded):
+        lines = []
+        for entry in logs:
+            icon = _LEVEL_ICON.get(entry.level, "ℹ️")
+            lines.append(f"[+{entry.elapsed:>6.2f}s] {icon}  {entry.message}")
+        st.code("\n".join(lines), language=None)
 
 def display_report(report_md: str):
     START = "<!--PLOTLY_START-->"
@@ -242,7 +266,9 @@ def md_to_html(md_text: str, title: str = "orikta Report") -> str:
 if st.session_state.history:
     chosen = st.session_state.history[st.session_state.selected_history_index]
     st.markdown(f"### {_t('result_title')}")
-    
+
+    display_pipeline_logs(chosen.get("logs", []), expanded=verbose)
+
     # Use the new helper function to display the report content.
     display_report(chosen["response"])
     

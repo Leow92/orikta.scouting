@@ -13,6 +13,7 @@ from groq import Groq
 from tools.analyze import analyze_player
 from tools.compare import compare_players
 from prompts.render import render
+import utils.pipeline_log as pipeline_log
 
 load_dotenv()
 _client = Groq(api_key=os.getenv("GROQ_API_KEY"))
@@ -24,6 +25,7 @@ _ROUTER_SYSTEM = render("router.j2")
 # ------------------------------------------------------------------ #
 def _llm_route(query: str) -> dict:
     """Call Groq (JSON mode) to classify the query. Returns a routing dict."""
+    pipeline_log.log("[router] Sending query to LLM router (llama-3.3-70b-versatile)…")
     try:
         resp = _client.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -36,11 +38,20 @@ def _llm_route(query: str) -> dict:
             max_tokens=256,
         )
         raw = (resp.choices[0].message.content or "{}").strip()
-        return json.loads(raw)
+        result = json.loads(raw)
+        pipeline_log.log(
+            f"[router] Intent: {result.get('tool', '?')} | "
+            f"Players: {result.get('players', [])} | "
+            f"Language: {result.get('language', '?')}",
+            level="success",
+        )
+        return result
     except json.JSONDecodeError:
+        pipeline_log.log("[router] Malformed JSON from LLM router", level="error")
         return {"tool": "out_of_scope", "players": [], "language": "en",
                 "message": "⚠️ Router returned malformed JSON. Please rephrase your query."}
     except Exception as e:
+        pipeline_log.log(f"[router] Router error: {e}", level="error")
         return {"tool": "out_of_scope", "players": [], "language": "en",
                 "message": f"⚠️ Router error: {e}"}
 
@@ -94,14 +105,19 @@ def route_query(user_query: str, skip_llm: bool = False) -> tuple[str, str]:
 
     if tool == "analyze":
         if not players:
+            pipeline_log.log("[router] No player name detected — cannot dispatch", level="warning")
             return _no_player_msg(language), language
+        pipeline_log.log(f"[router] Dispatching to analyze → {players[:1]}")
         return analyze_player(players[:1], language=language, skip_llm=skip_llm), language
 
     if tool == "compare":
         if len(players) < 2:
+            pipeline_log.log("[router] Fewer than 2 players detected — cannot compare", level="warning")
             return _no_player_msg(language), language
+        pipeline_log.log(f"[router] Dispatching to compare → {players[:2]}")
         return compare_players(players[:2], language=language, skip_llm=skip_llm), language
 
     # out_of_scope
+    pipeline_log.log("[router] Out of scope — returning guidance message", level="warning")
     msg = (routing.get("message") or "").strip() or _default_out_of_scope(language)
     return msg, language

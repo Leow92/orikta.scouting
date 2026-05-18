@@ -24,16 +24,11 @@ from tools.grading import (
 )
 from utils.lang import _is_fr
 from ui.graph import create_spider_graph
+import utils.pipeline_log as pipeline_log
 
 # ------------------------- #
-# Config & small utilities  #
+# Small utilities           #
 # ------------------------- #
-VERBOSE = False
-
-def _log(msg: str) -> None:
-    if VERBOSE:
-        print(msg)
-
 def _md(s: str) -> str:
     return textwrap.dedent(s).strip()
 
@@ -272,29 +267,32 @@ def analyze_player(
         return "⚠️ Please provide exactly one player to analyze."
 
     query_name = players[0]
-    _log(f"🧪 Analyze request for: {query_name}")
+    pipeline_log.log(f"[analyze] Starting analysis for: {query_name}")
 
     season = current_season()
 
     # ---- 1. Search player ----
+    pipeline_log.log(f"[analyze] Searching API-football for '{query_name}' (season {season})…")
     results = search_player(query_name, season=season)
     if not results:
-        # Try previous season as fallback
+        pipeline_log.log(f"[analyze] No results in season {season}, retrying season {season - 1}…", level="warning")
         results = search_player(query_name, season=season - 1)
         if results:
             season = season - 1
     if not results:
+        pipeline_log.log(f"[analyze] Player not found: {query_name}", level="error")
         return f"❌ No player found for: **{query_name}**. Try a more complete name (e.g. full first + last name)."
 
     player_obj = pick_best_player(results, query_name)
     if not player_obj:
+        pipeline_log.log(f"[analyze] Could not pick best match from {len(results)} results", level="error")
         return f"❌ Could not identify a best match for: **{query_name}**."
 
     player_info = player_obj.get("player") or {}
     photo_url = player_info.get("photo")
     full_name = player_info.get("name") or query_name.title()
     player_id = player_info.get("id")
-    _log(f"✅ Matched player: {full_name} (id={player_id})")
+    pipeline_log.log(f"[analyze] Matched → {full_name} (id={player_id})", level="success")
 
     entry = best_stats_entry(player_obj)
     if not entry:
@@ -308,20 +306,20 @@ def analyze_player(
         # ---- 2. Fetch league pool for percentiles ----
         pool: list[dict] = []
         if league_id:
-            _log(f"📡 Fetching league pool: league_id={league_id}, season={season}")
+            pipeline_log.log(f"[analyze] Fetching league pool: {league_name} (id={league_id}), season {season}…")
             pool = get_league_players(league_id, season, max_pages=5)
             if not pool:
-                _log(f"⚠️ No league data available for {league_name} (season {season}). Using empty pool.")
-                # Fallback: Use empty pool and skip percentiles
+                pipeline_log.log(f"[analyze] No pool data for {league_name} season {season} — percentiles unavailable", level="warning")
                 scout_df = build_scout_df(player_obj, [], position_filter=position_str)
             else:
-                _log(f"📊 Pool size: {len(pool)} players")
+                pipeline_log.log(f"[analyze] Pool fetched: {len(pool)} players in {league_name}", level="success")
                 scout_df = build_scout_df(player_obj, pool, position_filter=position_str)
         else:
-            _log(f"⚠️ No league_id available for {full_name}. Using empty pool.")
+            pipeline_log.log(f"[analyze] No league_id for {full_name} — skipping pool fetch", level="warning")
             scout_df = build_scout_df(player_obj, [], position_filter=position_str)
 
         # ---- 4. Build profile ----
+        pipeline_log.log(f"[analyze] Scout DataFrame built ({len(scout_df)} metrics)")
         profile = build_profile(player_obj)
         items = _merge_profile_items(profile)
         presentation_md = _profile_table_md(full_name, items, language)
@@ -343,6 +341,7 @@ def analyze_player(
         role_hint = f"{role_base}:{role_sub}" if role_sub else role_base
 
         # ---- 6. Compute deterministic grade ----
+        pipeline_log.log(f"[analyze] Positions detected: {positions}")
         grade_bd = compute_grade(scout_df, role_hint=role_hint)
         if not positions:
             if ":" in grade_bd.role:
@@ -352,6 +351,7 @@ def analyze_player(
                 positions = [(grade_bd.role, None)]
 
         # ---- 7. Multi-position grades ----
+        pipeline_log.log(f"[analyze] Grade computed → role: {grade_bd.role}, score: {grade_bd.final_score:.1f}/100", level="success")
         per_pos = compute_grade_for_positions(scout_df, positions)
         per_pos_sorted = dict(sorted(per_pos.items(), key=lambda kv: kv[1].final_score, reverse=True))
 
@@ -370,6 +370,7 @@ def analyze_player(
         multi_md = multi_title + "\n" + "\n".join(rows) + "\n"
 
         # ---- 8. Style Fit Matrix ----
+        pipeline_log.log(f"[analyze] Multi-position grades computed ({len(per_pos)} roles)")
         styles = styles or list(PLAY_STYLE_PRESETS.keys())
         style_df, *_ = _build_style_matrix(
             scout_df, positions, styles, style_strength=float(style_strength)
@@ -434,9 +435,11 @@ def analyze_player(
         trend_block_md, _ = build_trend_block_for_llm(current_metrics, prev_metrics, language)
 
         # ---- 11. Spider graph ----
+        pipeline_log.log(f"[analyze] Style fit matrix built ({len(styles)} styles × {len(positions)} roles)")
         if "Percentile" in scout_df.columns:
             scout_df["Percentile"] = pd.to_numeric(scout_df["Percentile"], errors="coerce")
 
+        pipeline_log.log(f"[analyze] Generating spider chart for {full_name}…")
         spider_fig = create_spider_graph(
             player_data=scout_df,
             player_name=full_name,
@@ -445,11 +448,11 @@ def analyze_player(
         )
         raw_plotly = spider_fig.to_html(full_html=False, include_plotlyjs="inline")
         spider_graph_html = f"<!--PLOTLY_START-->{raw_plotly}<!--PLOTLY_END-->"
+        pipeline_log.log("[analyze] Spider chart generated", level="success")
 
         # ---- 12. Fast preview (skip LLM) ----
         if skip_llm:
-            _log("⚡ Fast preview: skipping LLM.")
-            print("✅ Report Generation Done.")
+            pipeline_log.log("[analyze] Fast preview mode — skipping LLM narrative", level="success")
             return _md(f"""
 {player_photo_html}
 {presentation_md}
@@ -466,6 +469,7 @@ def analyze_player(
 """)
 
         # ---- 13. LLM analysis ----
+        pipeline_log.log("[analyze] Calling LLM for scouting narrative (streaming)…")
         top_roles_for_llm = [
             (label_from_pair(*(rk.split(":") if ":" in rk else (rk, None))), round(bd.final_score, 1))
             for rk, bd in list(per_pos_sorted.items())[:3]
@@ -488,7 +492,7 @@ def analyze_player(
             presentation_md=presentation_md,
         )
 
-        print("✅ Report Generation Done.")
+        pipeline_log.log("[analyze] Report generation complete", level="success")
         return _md(f"""
 {player_photo_html}
 {presentation_md}
@@ -507,4 +511,5 @@ def analyze_player(
 """)
 
     except Exception as e:
+        pipeline_log.log(f"[analyze] Unhandled error: {e}", level="error")
         return f"⚠️ Error analyzing **{full_name}**: {e}"

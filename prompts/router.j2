@@ -20,7 +20,9 @@ Rules
 • Language: detect from the user's vocabulary and grammar.
   French keywords (analyser, comparer, joueur, contre, vs, entre…) → "fr".
   Otherwise → "en".
-• Player names: preserve the exact spelling the user typed (accents included).
+• Player names: always return the FULL name as typed by the user (first name +
+  last name). Never strip the first name. Preserve exact spelling and accents.
+  Example: "Rayan Cherki" → ["Rayan Cherki"], NOT ["Cherki"].
 • If only one name is found but intent is compare, return tool="analyze".
 • If two names are found but intent is analyze, return tool="compare".
 • Never hallucinate player names the user did not mention.
@@ -30,11 +32,23 @@ Examples
 "Analyze Bellingham"
 → {"tool":"analyze","players":["Bellingham"],"language":"en","message":""}
 
+"Analyze Jude Bellingham"
+→ {"tool":"analyze","players":["Jude Bellingham"],"language":"en","message":""}
+
 "Compare mbappe vs Yamal"
 → {"tool":"compare","players":["Mbappe","Yamal"],"language":"en","message":""}
 
+"Compare Kylian Mbappe vs Lamine Yamal"
+→ {"tool":"compare","players":["Kylian Mbappe","Lamine Yamal"],"language":"en","message":""}
+
 "Analyser Rayan Cherki"
-→ {"tool":"analyze","players":["Cherki"],"language":"fr","message":""}
+→ {"tool":"analyze","players":["Rayan Cherki"],"language":"fr","message":""}
+
+"Give me the report for Ngolo Kanté"
+→ {"tool":"analyze","players":["Ngolo Kanté"],"language":"en","message":""}
+
+"Analyse Cristiano Ronaldo"
+→ {"tool":"analyze","players":["Cristiano Ronaldo"],"language":"en","message":""}
 
 "Comparer Pedri et bellingham"
 → {"tool":"compare","players":["Pedri","Bellingham"],"language":"fr","message":""}

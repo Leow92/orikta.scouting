@@ -15,24 +15,48 @@ load_dotenv()
 _API_KEY = os.getenv("API_FOOTBALL_KEY")
 _BASE = "https://v3.football.api-sports.io"
 
-# League IDs for the most common European competitions.
-# Used to prefer major-league stats entries when a player has multiple.
+# League IDs used to prefer real-competition stats over cups / lower divisions.
 MAJOR_LEAGUE_IDS: set[int] = {
-    39,   # Premier League
-    140,  # La Liga
-    78,   # Bundesliga
-    135,  # Serie A
-    61,   # Ligue 1
+    # Big-5 Europe
+    39,   # Premier League (England)
+    140,  # La Liga (Spain)
+    78,   # Bundesliga (Germany)
+    135,  # Serie A (Italy)
+    61,   # Ligue 1 (France)
+    # Europe — tier-2 domestic
+    40,   # EFL Championship (England)
+    79,   # 2. Bundesliga (Germany)
+    62,   # Ligue 2 (France)
+    136,  # Serie B (Italy)
+    141,  # Segunda División (Spain)
+    95,   # Liga Portugal 2
+    # Europe — other top flights
     94,   # Primeira Liga (Portugal)
-    88,   # Eredivisie
-    203,  # Süper Lig
-    262,  # Liga MX
-    253,  # MLS
-    144,  # Jupiler Pro League
+    88,   # Eredivisie (Netherlands)
+    203,  # Süper Lig (Turkey)
+    144,  # Jupiler Pro League / Belgian First Division A
     207,  # Scottish Premiership
-    65,   # Copa del Rey (exclude — cup, fewer minutes)
-    119,  # Eliteserien
-    197,  # Super League Greece
+    197,  # Super League 1 (Greece)
+    119,  # Eliteserien (Norway)
+    113,  # Allsvenskan (Sweden)
+    235,  # Russian Premier League
+    283,  # Ukrainian Premier League
+    218,  # Austrian Bundesliga
+    144,  # Belgian First Division A (Jupiler)
+    # Americas
+    253,  # MLS (USA)
+    262,  # Liga MX (Mexico)
+    128,  # Argentine Primera División
+    71,   # Brazilian Série A
+    239,  # Colombian Primera A
+    265,  # Ecuadorian Serie A
+    # Middle East
+    307,  # Saudi Pro League (Ronaldo, Benzema, Neymar…)
+    188,  # Qatar Stars League
+    274,  # UAE Pro League
+    # Asia & Oceania
+    169,  # Chinese Super League
+    292,  # K League 1 (South Korea)
 }
 
 # ------------------------------------------------------------------ #
@@ -87,8 +111,22 @@ def _get(endpoint: str, params: dict, timeout: int = 20) -> dict:
 # ------------------------------------------------------------------ #
 # Cached API calls                                                     #
 # ------------------------------------------------------------------ #
-# Leagues to scan when searching by name (in priority order)
-SEARCH_LEAGUES: list[int] = [39, 140, 78, 135, 61, 94, 88, 203, 262, 253]
+# Leagues scanned when searching by name, ordered by prestige / likelihood.
+# All calls are cached, so extra leagues only cost API quota on cold misses.
+SEARCH_LEAGUES: list[int] = [
+    # Big-5 Europe (most players live here)
+    39, 140, 78, 135, 61,
+    # Other major European top flights
+    94, 88, 203, 144, 207, 197, 113, 119, 235, 283, 218,
+    # Saudi Pro League (Ronaldo, Benzema…) + other Middle East
+    307, 188, 274,
+    # Americas
+    253, 262, 128, 71, 239, 265,
+    # Asia
+    169, 292,
+    # European tier-2 (talented youngsters, loan players)
+    40, 79, 62, 136, 141, 95,
+]
 
 @st.cache_data(ttl=12 * 3600)
 def _search_in_league(name: str, league_id: int, season: int) -> list[dict]:
@@ -96,28 +134,40 @@ def _search_in_league(name: str, league_id: int, season: int) -> list[dict]:
     data = _get("players", {"search": name, "league": league_id, "season": season})
     return data.get("response", [])
 
+def _normalize_name(s: str) -> str:
+    """Lowercase, strip accents and apostrophes for fuzzy comparison."""
+    import unicodedata
+    s = s.lower().strip()
+    s = s.replace("'", "").replace("’", "").replace("`", "")
+    return unicodedata.normalize("NFKD", s).encode("ASCII", "ignore").decode()
+
+
 def _search_variants(name: str) -> list[str]:
     """Generate search variants to handle API-football's abbreviated name format.
 
     API-football stores players as "O. Dembélé" (initial + last name), so a
     full first+last query like "ousmane dembélé" never matches.  We try:
-      1. The original string (works for single-word queries like "Bellingham")
-      2. The last word only — usually the last name ("dembélé")
-      3. Accent-stripped last name ("dembele") — handles API inconsistencies
-      4. Accent-stripped full name ("ousmane dembele")
+      1. The original string ("Rayan Cherki", "Bellingham")
+      2. Last name only ("Cherki") — most reliable single-token search
+      3. First name only — useful when last name is ambiguous
+      4. Accent-stripped last name ("dembele")
+      5. Accent-stripped full name ("ousmane dembele")
     """
     import unicodedata
 
     def _strip(s: str) -> str:
         return unicodedata.normalize("NFKD", s).encode("ASCII", "ignore").decode().strip()
 
-    parts   = name.strip().split()
-    last    = parts[-1] if parts else name
+    parts  = name.strip().split()
+    last   = parts[-1] if parts else name
+    first  = parts[0] if len(parts) > 1 else ""
     last_stripped  = _strip(last)
     full_stripped  = _strip(name)
+    first_stripped = _strip(first) if first else ""
 
     seen, variants = set(), []
-    for v in [name, last, last_stripped, full_stripped]:
+    for v in [name, last, first, last_stripped, full_stripped, first_stripped]:
+        v = v.strip()
         if v and v not in seen:
             seen.add(v)
             variants.append(v)
@@ -192,25 +242,35 @@ def best_stats_entry(player_obj: dict) -> dict | None:
 def pick_best_player(results: list[dict], query: str) -> dict | None:
     """From a list of search results pick the player whose name best
     matches `query` and who has the most minutes played.
+
+    Matching is done on accent- and apostrophe-normalised strings so that
+    "Ngolo Kante" correctly maps to "N'Golo Kanté", etc.
     """
     if not results:
         return None
 
-    q = query.lower().strip()
+    q      = query.lower().strip()
+    q_norm = _normalize_name(q)
+
     scored: list[tuple[int, int, dict]] = []
     for r in results:
         p = r.get("player") or {}
-        full = (p.get("name") or "").lower()
+        full  = (p.get("name") or "").lower()
         first = (p.get("firstname") or "").lower()
-        last = (p.get("lastname") or "").lower()
+        last  = (p.get("lastname") or "").lower()
 
-        if q == full:
+        full_norm  = _normalize_name(full)
+        first_norm = _normalize_name(first)
+        last_norm  = _normalize_name(last)
+
+        # Score on normalised strings so apostrophes/accents don't block matches
+        if q_norm == full_norm:
             name_score = 4
-        elif q in full or full in q:
+        elif q_norm in full_norm or full_norm in q_norm:
             name_score = 3
-        elif q == last or q == first:
+        elif q_norm == last_norm or q_norm == first_norm:
             name_score = 2
-        elif any(part in full for part in q.split() if len(part) > 2):
+        elif any(part in full_norm for part in q_norm.split() if len(part) > 2):
             name_score = 1
         else:
             name_score = 0

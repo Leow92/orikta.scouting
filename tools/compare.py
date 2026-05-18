@@ -24,6 +24,7 @@ from tools.grading import (
 )
 from utils.llm_analysis_comparison import compare_llm_workflow
 from utils.lang import _is_fr
+import utils.pipeline_log as pipeline_log
 from prompts.lang import glossary_block as _glossary_block_for
 from ui.graph import create_spider_graph_duo
 from requests.exceptions import ReadTimeout
@@ -172,33 +173,46 @@ def _fetch_player(name: str, language: str = "English") -> dict:
     """
     season = current_season()
 
+    pipeline_log.log(f"[compare] Searching API-football for '{name}' (season {season})…")
     results = search_player(name, season=season)
     if not results:
+        pipeline_log.log(f"[compare] No results in season {season}, retrying season {season - 1}…", level="warning")
         results = search_player(name, season=season - 1)
         if results:
             season = season - 1
     if not results:
+        pipeline_log.log(f"[compare] Player not found: {name}", level="error")
         raise RuntimeError(f"No player found for: {name}")
 
     player_obj = pick_best_player(results, name)
     if not player_obj:
+        pipeline_log.log(f"[compare] Could not pick best match for: {name}", level="error")
         raise RuntimeError(f"Could not identify best match for: {name}")
 
     player_info = player_obj.get("player") or {}
     full_name   = player_info.get("name") or name.title()
     player_id   = player_info.get("id")
     position_str = get_position_str(player_obj)
+    pipeline_log.log(f"[compare] Matched → {full_name} (id={player_id})", level="success")
 
     entry = best_stats_entry(player_obj)
     if not entry:
+        pipeline_log.log(f"[compare] No stats entry for {full_name} season {season}", level="error")
         raise RuntimeError(f"No statistics for {full_name} in season {season}.")
 
-    league_id = (entry.get("league") or {}).get("id")
+    league_id   = (entry.get("league") or {}).get("id")
+    league_name = (entry.get("league") or {}).get("name", "Unknown")
     pool: list[dict] = []
     if league_id:
+        pipeline_log.log(f"[compare] Fetching league pool: {league_name} (id={league_id}), season {season}…")
         pool = get_league_players(league_id, season, max_pages=5)
+        if pool:
+            pipeline_log.log(f"[compare] Pool fetched: {len(pool)} players in {league_name}", level="success")
+        else:
+            pipeline_log.log(f"[compare] No pool data for {league_name} — percentiles unavailable", level="warning")
 
     scout_df = build_scout_df(player_obj, pool, position_filter=position_str)
+    pipeline_log.log(f"[compare] Scout DataFrame for {full_name}: {len(scout_df)} metrics")
     profile  = build_profile(player_obj)
 
     # Per-90 dicts for trend analysis
@@ -251,11 +265,15 @@ def compare_players(
 
         A_name, B_name = A["full_name"], B["full_name"]
         scoutA, scoutB = A["scout_df"], B["scout_df"]
+        pipeline_log.log(f"[compare] Both players fetched: {A_name} vs {B_name}", level="success")
 
         # Align percentile series
+        pipeline_log.log("[compare] Aligning common metrics…")
         A_p, B_p, common_idx = _align_metrics(scoutA, scoutB)
         if len(common_idx) == 0:
+            pipeline_log.log("[compare] No common metrics found — cannot compare", level="error")
             return _t("⚠️ No common metrics to compare.", "⚠️ Aucune métrique commune à comparer.", language)
+        pipeline_log.log(f"[compare] Aligned {len(common_idx)} common metrics", level="success")
 
         # Determine target role (infer from A if not provided)
         if not target_role:
@@ -264,8 +282,10 @@ def compare_players(
         base = target_role.split(":")[0]
         sub  = target_role.split(":")[1] if ":" in target_role else None
         role_label = label_from_pair(base, sub)
+        pipeline_log.log(f"[compare] Target role: {role_label} ({target_role})")
 
         # Duo spider chart
+        pipeline_log.log("[compare] Generating duo spider chart…")
         spider_duo_fig = create_spider_graph_duo(
             playerA_data=scoutA,
             playerB_data=scoutB,
@@ -281,6 +301,7 @@ def compare_players(
             f"{spider_duo_fig.to_html(full_html=False, include_plotlyjs='inline')}"
             f"<!--PLOTLY_END-->"
         )
+        pipeline_log.log("[compare] Duo spider chart generated", level="success")
 
         # Build role weights
         base_w = DEFAULT_WEIGHTS.get(base, DEFAULT_WEIGHTS["mf"])
@@ -379,10 +400,14 @@ def compare_players(
                     present_metrics.append(parts[0])
         glossary_block = _glossary_block_for(language, list(dict.fromkeys(present_metrics)))
 
+        pipeline_log.log(f"[compare] Style head-to-head computed ({len(styles)} styles), best: {best_style_label}", level="success")
+
         if skip_llm:
+            pipeline_log.log("[compare] Fast preview mode — skipping LLM narrative", level="success")
             deterministic_md += "\n\n> ⚡ **Fast preview:** LLM analysis skipped."
             return deterministic_md
 
+        pipeline_log.log("[compare] Calling LLM for comparison narrative…")
         compare_llm_md = compare_llm_workflow(
             A_name=A_name, B_name=B_name,
             language=language,
@@ -398,8 +423,9 @@ def compare_players(
             call_fn=_call_twice,
         )
 
-        print("✅ Report Generation Done.")
+        pipeline_log.log("[compare] Report generation complete", level="success")
         return deterministic_md + "\n\n---\n\n" + compare_llm_md
 
     except Exception as e:
+        pipeline_log.log(f"[compare] Unhandled error: {e}", level="error")
         return f"⚠️ Compare failed: {e}"
