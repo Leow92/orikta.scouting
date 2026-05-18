@@ -14,7 +14,8 @@ from utils.percentile_engine import (
     build_scout_df, build_profile, get_position_str, build_season_comparison,
 )
 from tools.analyze import (
-    build_trend_block_for_llm, _t, _nodata, _to_numeric_safely,
+    build_trend_block_for_llm, _t, _nodata, _to_numeric_safely, _player_card_html,
+    _merge_profile_items,
 )
 from tools.grading import (
     compute_grade, label_from_pair,
@@ -33,6 +34,8 @@ from utils.llm_client import _groq_chat
 # -----------------------------
 # Deterministic helpers
 # -----------------------------
+SEPARATOR = "\n\n---\n\n"
+
 def _invert_if_negative(metric: str, pct: float) -> float:
     for neg in NEGATIVE_KEYS:
         if neg.lower() in metric.lower():
@@ -162,6 +165,39 @@ def _cosine_similarity(A: pd.Series, B: pd.Series) -> float:
     sim = float((a * b).sum() / (na * nb))
     return max(0.0, min(1.0, (sim + 1) / 2.0)) * 100.0
 
+def _comparison_profile_md(
+    name_a: str, profile_a: dict,
+    name_b: str, profile_b: dict,
+    language: str,
+) -> str:
+    title = _t("### 👤 Players at a Glance", "### 👤 Présentation des joueurs", language)
+    items_a = _merge_profile_items(profile_a)
+    items_b = _merge_profile_items(profile_b)
+
+    dict_a = {it["label"].lower(): it["value"] for it in items_a}
+    dict_b = {it["label"].lower(): it["value"] for it in items_b}
+
+    # Union of all labels, A-order first then B-only additions
+    seen: dict[str, str] = {}
+    for it in items_a:
+        seen.setdefault(it["label"].lower(), it["label"])
+    for it in items_b:
+        seen.setdefault(it["label"].lower(), it["label"])
+
+    header = f"| Field | {name_a} | {name_b} |"
+    sep = "|---|---|---|"
+    rows = []
+    for label_lower, label_display in seen.items():
+        val_a = dict_a.get(label_lower, "—")
+        val_b = dict_b.get(label_lower, "—")
+        if val_a != "—" or val_b != "—":
+            rows.append(f"| **{label_display}** | {val_a} | {val_b} |")
+
+    if not rows:
+        return f"{title}\n\n**{name_a}** vs **{name_b}**\n"
+    return f"{title}\n\n" + "\n".join([header, sep] + rows)
+
+
 # -----------------------------
 # Fetch & normalise one player
 # -----------------------------
@@ -169,7 +205,7 @@ def _fetch_player(name: str, language: str = "English") -> dict:
     """
     Returns dict with:
       full_name, profile, scout_df (Metric/Per90/Percentile),
-      current_metrics, prev_metrics, trend_block_md, position_str
+      current_metrics, prev_metrics, trend_block_md, position_str, photo_url
     """
     season = current_season()
 
@@ -189,9 +225,10 @@ def _fetch_player(name: str, language: str = "English") -> dict:
         pipeline_log.log(f"[compare] Could not pick best match for: {name}", level="error")
         raise RuntimeError(f"Could not identify best match for: {name}")
 
-    player_info = player_obj.get("player") or {}
-    full_name   = player_info.get("name") or name.title()
-    player_id   = player_info.get("id")
+    player_info  = player_obj.get("player") or {}
+    full_name    = player_info.get("name") or name.title()
+    player_id    = player_info.get("id")
+    photo_url    = player_info.get("photo") or ""
     position_str = get_position_str(player_obj)
     pipeline_log.log(f"[compare] Matched → {full_name} (id={player_id})", level="success")
 
@@ -230,6 +267,7 @@ def _fetch_player(name: str, language: str = "English") -> dict:
         "prev_metrics":    prev_metrics,
         "trend_block_md":  trend_block_md,
         "position_str":    position_str,
+        "photo_url":       photo_url,
     }
 
 # -----------------------------
@@ -240,6 +278,15 @@ def _call_twice(prompt_text: str, language: str) -> str:
         return _groq_chat(prompt_text, language)
     except ReadTimeout:
         return _groq_chat(prompt_text, language)
+
+def _photos_header_html(url_a: str, name_a: str, url_b: str, name_b: str) -> str:
+    return (
+        '<div style="display:flex;gap:32px;align-items:flex-start;margin:12px 0 20px;">'
+        + _player_card_html(url_a, name_a, "#4CAF50")
+        + '<div style="font-size:2em;padding-top:28px;">⚡</div>'
+        + _player_card_html(url_b, name_b, "#2196F3")
+        + "</div>"
+    )
 
 # -----------------------------
 # Public API
@@ -265,6 +312,15 @@ def compare_players(
 
         A_name, B_name = A["full_name"], B["full_name"]
         scoutA, scoutB = A["scout_df"], B["scout_df"]
+        photos_html = _photos_header_html(
+            A.get("photo_url", ""), A_name,
+            B.get("photo_url", ""), B_name,
+        )
+        comparison_profile_md = _comparison_profile_md(
+            A_name, A["profile"],
+            B_name, B["profile"],
+            language,
+        )
         pipeline_log.log(f"[compare] Both players fetched: {A_name} vs {B_name}", level="success")
 
         # Align percentile series
@@ -376,8 +432,13 @@ def compare_players(
         style_line = _t("**Best style context**", "**Meilleur style**", language) + f": **{best_style_label}**"
         sim_line   = _t("**Profile similarity**", "**Similarité de profil**", language) + f": {similarity:.1f}/100"
 
-        deterministic_md = f"""{title}
-
+        deterministic_md = f"""
+{title}
+{SEPARATOR}
+{photos_html}
+{SEPARATOR}
+{comparison_profile_md}
+{SEPARATOR}
 {role_line}
 {style_line}
 {sim_line}
