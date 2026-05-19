@@ -9,6 +9,15 @@ THEMES = {
 def get_theme_css(theme_key: str) -> str:
     return f"<style>{_THEMES.get(theme_key, _LIGHT)}</style>"
 
+_CREATIVE_TITLE = """
+[data-testid="stMarkdownContainer"] h1 {
+    color: #ffffff !important;
+    font-style: italic !important;
+    text-transform: uppercase !important;
+    letter-spacing: 2px !important;
+}
+"""
+
 # ── Shared structural rules ──────────────────────────────────────────────────
 _BASE = """
 .block-container { padding-top: 1rem; padding-bottom: 2rem; }
@@ -21,17 +30,17 @@ hr { border: none; border-top: 1px solid var(--orikta-border, #e5e7eb); margin: 
 """
 
 # ── Classic Light ────────────────────────────────────────────────────────────
-_LIGHT = _BASE + """
+_LIGHT = _BASE + _CREATIVE_TITLE + """
 :root {
-    --orikta-border:   #e2e8f0;
-    --orikta-th-bg:    #f1f5f9;
-    --orikta-th-text:  #111827;
-    --orikta-caption:  #6b7280;
+    --orikta-border:   #1e3a6e;
+    --orikta-th-bg:    #002060;
+    --orikta-th-text:  #FFD700;
+    --orikta-caption:  #93c5fd;
 }
 """
 
 # ── World Cup 2026 ───────────────────────────────────────────────────────────
-_WORLDCUP = _BASE + """
+_WORLDCUP = _BASE + _CREATIVE_TITLE + """
 :root {
     --orikta-border:   #1e3a6e;
     --orikta-th-bg:    #002060;
@@ -51,7 +60,6 @@ section[data-testid="stSidebar"],
 }
 header[data-testid="stHeader"] {
     background: linear-gradient(90deg, #00205B 60%, #001440) !important;
-    border-bottom: 2px solid #FFD700 !important;
 }
 /* Typography */
 h1 {
