@@ -23,6 +23,9 @@ UI_STRINGS = {
         "input_placeholder": "e.g. create the report for Cherki • compare Mbappe vs Yamal",
         "generate": "Generate",
         "spinner": "🔎 Building report…",
+        "spinner_done": "✅ Report ready",
+        "spinner_error": "❌ Generation failed",
+        "pipeline_logs_title": "🪵 Pipeline logs",
         "meta_line": "⏱️ Generated in {s:.1f}s • Lang: {lang} • Styles: {styles}",
         "downloads_title": "⬇️ Download the Report",
         "sidebar_theme": "🎨 Theme",
@@ -41,10 +44,20 @@ UI_STRINGS = {
         "input_placeholder": "ex. génère le rapport de Cherki • compare Mbappe et Yamal",
         "generate": "Générer",
         "spinner": "🔎 Génération du rapport…",
+        "spinner_done": "✅ Rapport prêt",
+        "spinner_error": "❌ Échec de la génération",
+        "pipeline_logs_title": "🪵 Logs pipeline",
         "meta_line": "⏱️ Généré en {s:.1f}s • Langue : {lang} • Styles : {styles}",
         "downloads_title": "⬇️ Téléchargez le Rapport",
         "sidebar_theme": "🎨 Thème",
     },
+}
+
+_LEVEL_ICON = {
+    "info":    "ℹ️",
+    "success": "✅",
+    "warning": "⚠️",
+    "error":   "❌",
 }
 
 def _lang_code():
@@ -126,17 +139,30 @@ with st.form(key="query_form", clear_on_submit=False):
     submitted = st.form_submit_button(_t("generate"), type="primary", use_container_width=True)
 
 # -------- Run pipeline on submit --------
+_generation_run = False  # True only on the same script run as form submission
 if submitted and user_input and user_input != st.session_state.last_prompt:
     st.session_state.last_prompt = user_input
     st.session_state["_orikta_fast_preview"] = fast_preview
     st.session_state["_orikta_verbose"] = verbose
+    _generation_run = True
 
-    with st.spinner(_t("spinner")):
+    with st.status(_t("spinner"), expanded=True) as _status:
+        _log_slot = st.empty()
+
+        def _push_live_logs(entries):
+            lines = [
+                f"[+{e.elapsed:>6.2f}s] {_LEVEL_ICON.get(e.level, 'ℹ️')}  {e.message}"
+                for e in entries
+            ]
+            _log_slot.code("\n".join(lines), language=None)
+
         t0 = time.time()
         pipeline_log.reset()
+        pipeline_log.set_ui_callback(_push_live_logs)
         try:
             response, detected_lang = route_query(user_input, skip_llm=fast_preview)
             elapsed = time.time() - t0
+            pipeline_log.set_ui_callback(None)
 
             # Update session language to match what the router detected
             st.session_state.language = detected_lang
@@ -150,13 +176,16 @@ if submitted and user_input and user_input != st.session_state.last_prompt:
                 "logs": pipeline_log.get_logs(),
             })
             st.session_state.selected_history_index = 0
+            _status.update(label=_t("spinner_done"), state="complete", expanded=verbose)
         except Exception as e:
+            pipeline_log.set_ui_callback(None)
             st.session_state.history.insert(0, {
                 "prompt": user_input,
                 "response": f"⚠️ Error: {e}",
                 "logs": pipeline_log.get_logs(),
             })
             st.session_state.selected_history_index = 0
+            _status.update(label=_t("spinner_error"), state="error", expanded=True)
 
 # -------- Sidebar: History --------
 with st.sidebar:
@@ -174,21 +203,14 @@ with st.sidebar:
     else:
         st.info(_t("sidebar_history_empty"))
 
-_LEVEL_ICON = {
-    "info":    "ℹ️",
-    "success": "✅",
-    "warning": "⚠️",
-    "error":   "❌",
-}
-
 def display_pipeline_logs(logs, expanded: bool = False) -> None:
     if not logs:
         return
-    with st.expander("🪵 Pipeline logs", expanded=expanded):
-        lines = []
-        for entry in logs:
-            icon = _LEVEL_ICON.get(entry.level, "ℹ️")
-            lines.append(f"[+{entry.elapsed:>6.2f}s] {icon}  {entry.message}")
+    with st.expander(_t("pipeline_logs_title"), expanded=expanded):
+        lines = [
+            f"[+{e.elapsed:>6.2f}s] {_LEVEL_ICON.get(e.level, 'ℹ️')}  {e.message}"
+            for e in logs
+        ]
         st.code("\n".join(lines), language=None)
 
 def display_report(report_md: str):
@@ -254,7 +276,8 @@ def md_to_html(md_text: str, title: str = "orikta Report") -> str:
 if st.session_state.history:
     chosen = st.session_state.history[st.session_state.selected_history_index]
 
-    display_pipeline_logs(chosen.get("logs", []), expanded=verbose)
+    if not _generation_run:
+        display_pipeline_logs(chosen.get("logs", []), expanded=verbose)
 
     # Use the new helper function to display the report content.
     display_report(chosen["response"])

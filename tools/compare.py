@@ -417,11 +417,11 @@ def compare_players(
         scout_pct_A = pd.DataFrame({"Percentile": A_p}).to_markdown(tablefmt="pipe", index=True)
         scout_pct_B = pd.DataFrame({"Percentile": B_p}).to_markdown(tablefmt="pipe", index=True)
 
-        # Style table
+        """ # Style table
         style_header      = f"| {_t('Style','Style',language)} | {A_name} (p/100) | {B_name} (p/100) | {_t('Winner','Vainqueur',language)} |"
         style_section_title = _t("#### Style head-to-head (summary)", "#### Duel de styles (résumé)", language)
         style_sep         = "|---|---:|---:|---|"
-        style_rows_md     = "\n".join([style_header, style_sep] + style_rows)
+        style_rows_md     = "\n".join([style_header, style_sep] + style_rows) """
 
         # Cosine similarity
         similarity = _cosine_similarity(A_p, B_p)
@@ -444,9 +444,6 @@ def compare_players(
 {sim_line}
 
 {duo_plot_html}
-
-{style_section_title}
-{style_rows_md}
 
 #### {_t('Key role-critical differences (top 12 by role weight × gap)', 'Différences clés (top 12 par poids × écart)', language)}
 {aligned_diff_md}
@@ -477,7 +474,6 @@ def compare_players(
             style_influence=style_influence,
             scout_md_A=scout_pct_A, scout_md_B=scout_pct_B,
             trend_md_A=A["trend_block_md"], trend_md_B=B["trend_block_md"],
-            style_rows_md=style_rows_md,
             aligned_diff_md=aligned_diff_md,
             similarity_0_100=similarity,
             glossary_block=glossary_block,

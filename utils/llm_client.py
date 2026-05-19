@@ -63,7 +63,7 @@ def _chat_groq(user_content: str, language: str, model: str) -> str:
                 {"role": "user",   "content": user_content},
             ],
             temperature=1,
-            max_tokens=1500,
+            max_tokens=7000,
             stream=True,
         )
         chunks = []
