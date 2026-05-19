@@ -15,7 +15,7 @@ load_dotenv()
 # ------------------------------------------------------------------ #
 # Provider & model config (all overridable via .env)                  #
 # ------------------------------------------------------------------ #
-LLM_PROVIDER = "groq"  # "groq" | "mistral"
+LLM_PROVIDER = "mistral"  # "groq" | "mistral"
 
 GROQ_NARRATIVE_MODEL = os.getenv("GROQ_NARRATIVE_MODEL", "openai/gpt-oss-120b")
 GROQ_ROUTER_MODEL    = os.getenv("GROQ_ROUTER_MODEL",    "llama-3.3-70b-versatile")
