@@ -480,8 +480,6 @@ def analyze_player(
 {SEPARATOR}
 {multi_md}
 {SEPARATOR}
-{style_md}
-{SEPARATOR}
 {std2_md}
 """)
 
@@ -504,7 +502,6 @@ def analyze_player(
             scout_df,
             language=language,
             grade_ctx=grade_ctx,
-            multi_style_md=style_md,
             trend_block_md=trend_block_md,
             presentation_md=presentation_md,
         )
@@ -520,8 +517,6 @@ def analyze_player(
 {scout_md}
 {SEPARATOR}
 {multi_md}
-{SEPARATOR}
-{style_md}
 {SEPARATOR}
 {std2_md}
 {SEPARATOR}
