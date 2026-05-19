@@ -2,8 +2,7 @@
 """Visual themes for orikta.scouting injected via st.markdown CSS."""
 
 THEMES = {
-    "☀️ Classic Light": "light",
-    "🌙 Classic Dark":  "dark",
+    "☀️ Classic": "light",
     "⚽ World Cup 2026": "worldcup",
 }
 
@@ -28,39 +27,6 @@ _LIGHT = _BASE + """
     --orikta-th-bg:    #f1f5f9;
     --orikta-th-text:  #111827;
     --orikta-caption:  #6b7280;
-}
-"""
-
-# ── Classic Dark ─────────────────────────────────────────────────────────────
-_DARK = _BASE + """
-:root {
-    --orikta-border:   #374151;
-    --orikta-th-bg:    #1f2937;
-    --orikta-th-text:  #e5e7eb;
-    --orikta-caption:  #9ca3af;
-}
-.stApp,
-[data-testid="stAppViewContainer"],
-[data-testid="stAppViewContainer"] > .main {
-    background-color: #0e1117 !important;
-}
-section[data-testid="stSidebar"],
-[data-testid="stSidebarContent"] {
-    background-color: #111827 !important;
-}
-header[data-testid="stHeader"] {
-    background-color: rgba(14,17,23,0.95) !important;
-}
-.stMarkdown p,
-[data-testid="stMarkdownContainer"] p,
-[data-testid="stMarkdownContainer"] li,
-[data-testid="stMarkdownContainer"] span:not(.stBadge) { color: #e5e7eb !important; }
-h1, h2, h3, h4, h5, h6 { color: #f9fafb !important; }
-label { color: #d1d5db !important; }
-.stTextInput input {
-    background-color: #1f2937 !important;
-    color: #f9fafb !important;
-    border-color: #374151 !important;
 }
 """
 
@@ -157,4 +123,4 @@ section[data-testid="stSidebar"] span:not(.stBadge) { color: #e2e8f0 !important;
 [data-testid="stCaptionContainer"] { color: #93c5fd !important; }
 """
 
-_THEMES = {"light": _LIGHT, "dark": _DARK, "worldcup": _WORLDCUP}
+_THEMES = {"light": _LIGHT, "worldcup": _WORLDCUP}

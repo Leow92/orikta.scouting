@@ -60,7 +60,7 @@ st.set_page_config(
     page_icon="⚽",  # or use a custom icon (e.g., "🔵" or a local image)
     layout="wide",  # or "wide" if you prefer
 )
-st.session_state.setdefault("theme_selector", "☀️ Classic Light")
+st.session_state.setdefault("theme_selector", "☀️ Classic")
 st.markdown(get_theme_css(THEMES.get(st.session_state.theme_selector, "light")), unsafe_allow_html=True)
 
 # -------- Sidebar: Language & Options --------
