@@ -1,5 +1,3 @@
-# app.py
-
 import time
 import streamlit as st
 from agents.router import route_query
@@ -70,25 +68,24 @@ def _t(key: str) -> str:
 # -------- Page config & theme --------
 st.set_page_config(
     page_title="orikta.scouting — Single Player",
-    page_icon="⚽",  # or use a custom icon (e.g., "🔵" or a local image)
-    layout="wide",  # or "wide" if you prefer
+    page_icon="⚽",
+    layout="wide",
 )
 st.session_state.setdefault("theme_selector", "⚽ World Cup 2026")
 st.markdown(get_theme_css(THEMES.get(st.session_state.theme_selector, "worldcup")), unsafe_allow_html=True)
 
-# -------- Sidebar: Language & Options --------
 # -------- Sidebar: Language & Options --------
 with st.sidebar:
     st.markdown(f"### {_t('sidebar_language')}")
     current_lang = st.session_state.get("language", "English")
     idx = 1 if str(current_lang).lower().startswith("fr") else 0
     selection = st.radio(
-        "Language",                             # <= non-empty
+        "Language",
         options=["English", "Français"],
         index=idx,
         horizontal=True,
         key="lang_selector",
-        label_visibility="collapsed",           # <= hide label in UI
+        label_visibility="collapsed",
     )
 
     st.session_state.language = "Français" if selection.startswith("Fr") else "English"
@@ -113,7 +110,6 @@ with st.sidebar:
     st.markdown("---")
     clear_hist = st.button(_t("sidebar_clear_history"))
 
-
 # Clear history if requested
 if clear_hist:
     st.session_state.history = []
@@ -131,15 +127,24 @@ st.session_state.setdefault("selected_history_index", 0)
 # -------- Input form (single chat bar + Generate) --------
 with st.form(key="query_form", clear_on_submit=False):
     user_input = st.text_input(
-        _t("input_label"),                 # localized, non-empty label (kept collapsed)
+        _t("input_label"),
         key="input",
-        placeholder=_t("input_placeholder"),  # <- localized placeholder
+        placeholder=_t("input_placeholder"),
         label_visibility="collapsed",
     )
     submitted = st.form_submit_button(_t("generate"), type="primary", use_container_width=True)
 
 # -------- Run pipeline on submit --------
-_generation_run = False  # True only on the same script run as form submission
+_generation_run = False
+
+# Define _push_live_logs before it is used
+def _push_live_logs(entries):
+    lines = [
+        f"[+{e.elapsed:>6.2f}s] {_LEVEL_ICON.get(e.level, 'ℹ️')}  {e.message}"
+        for e in entries
+    ]
+    _log_slot.code("\n".join(lines), language=None)
+
 if submitted and user_input and user_input != st.session_state.last_prompt:
     st.session_state.last_prompt = user_input
     st.session_state["_orikta_fast_preview"] = fast_preview
@@ -148,14 +153,6 @@ if submitted and user_input and user_input != st.session_state.last_prompt:
 
     with st.status(_t("spinner"), expanded=True) as _status:
         _log_slot = st.empty()
-
-        def _push_live_logs(entries):
-            lines = [
-                f"[+{e.elapsed:>6.2f}s] {_LEVEL_ICON.get(e.level, 'ℹ️')}  {e.message}"
-                for e in entries
-            ]
-            _log_slot.code("\n".join(lines), language=None)
-
         t0 = time.time()
         pipeline_log.reset()
         pipeline_log.set_ui_callback(_push_live_logs)
@@ -193,7 +190,7 @@ with st.sidebar:
     if st.session_state.history:
         prompt_options = [f"{i+1}. {h['prompt']}" for i, h in enumerate(st.session_state.history)]
         sel = st.selectbox(
-            _t("sidebar_history"),  # or "Select a past result"
+            _t("sidebar_history"),
             options=prompt_options,
             index=st.session_state.selected_history_index,
             key="history_selector",
@@ -245,13 +242,13 @@ def display_report(report_md: str):
 def md_to_html(md_text: str, title: str = "orikta Report") -> str:
         try:
             import markdown
-            
+
             # Split the markdown text at the first instance of a HTML block
             parts = md_text.split('<html>', 1)
-            
+
             # The first part is any markdown text before the HTML.
             body_start = markdown.markdown(parts[0], extensions=["tables", "fenced_code"])
-            
+
             # The second part is the raw HTML of the graph plus the rest of the markdown.
             if len(parts) > 1:
                 raw_html_content = '<html>' + parts[1]
@@ -261,7 +258,7 @@ def md_to_html(md_text: str, title: str = "orikta Report") -> str:
 
         except Exception:
             body = f"<pre>{md_text}</pre>"
-            
+
         css = """
         body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;line-height:1.55;padding:24px;color:#111}
         table{border-collapse:collapse;width:100%}
@@ -279,9 +276,8 @@ if st.session_state.history:
     if not _generation_run:
         display_pipeline_logs(chosen.get("logs", []), expanded=verbose)
 
-    # Use the new helper function to display the report content.
     display_report(chosen["response"])
-    
+
     styles_chosen = ", ".join(chosen.get("styles", [])) or "—"
     mode = "Fast" if chosen.get("skip_llm") else "Full"
     st.caption(_t("meta_line").format(
@@ -299,7 +295,6 @@ if st.session_state.history:
 
     fname_base = _slugify(chosen["prompt"])
 
-    # The md_to_html function is now at the top.
     html_bytes = md_to_html(chosen["response"], title="orikta — Scouting Report").encode("utf-8")
     st.download_button(
         _t("HTML"),
