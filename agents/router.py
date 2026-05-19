@@ -6,17 +6,12 @@
 
 from __future__ import annotations
 import json
-import os
-from dotenv import load_dotenv
-from groq import Groq
 
 from tools.analyze import analyze_player
 from tools.compare import compare_players
 from prompts.render import render
+from utils.llm_client import llm_route, ACTIVE_ROUTER_MODEL, LLM_PROVIDER
 import utils.pipeline_log as pipeline_log
-
-load_dotenv()
-_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 _ROUTER_SYSTEM = render("router.j2")
 
@@ -24,20 +19,15 @@ _ROUTER_SYSTEM = render("router.j2")
 # LLM routing call                                                     #
 # ------------------------------------------------------------------ #
 def _llm_route(query: str) -> dict:
-    """Call Groq (JSON mode) to classify the query. Returns a routing dict."""
-    pipeline_log.log("[router] Sending query to LLM router (llama-3.3-70b-versatile)…")
+    """Call the active LLM provider (JSON mode) to classify the query."""
+    pipeline_log.log(f"[router] Sending query to LLM router ({LLM_PROVIDER}/{ACTIVE_ROUTER_MODEL})…")
     try:
-        resp = _client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+        raw = llm_route(
             messages=[
                 {"role": "system", "content": _ROUTER_SYSTEM},
                 {"role": "user",   "content": query},
             ],
-            response_format={"type": "json_object"},
-            temperature=0,
-            max_tokens=256,
         )
-        raw = (resp.choices[0].message.content or "{}").strip()
         result = json.loads(raw)
         pipeline_log.log(
             f"[router] Intent: {result.get('tool', '?')} | "

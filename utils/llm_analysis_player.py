@@ -5,7 +5,7 @@ from datetime import datetime
 import pandas as pd
 from requests.exceptions import ReadTimeout
 from utils.lang import _is_fr
-from utils.llm_client import _groq_chat
+from utils.llm_client import llm_chat
 from prompts.render import render
 from prompts.lang import glossary_block, role_guide, ROLE_CODE_MAP
 
@@ -98,9 +98,9 @@ def analyze_single_player_workflow(
 
         def _call(prompt: str) -> str:
             try:
-                return _groq_chat(prompt, language)
+                return llm_chat(prompt, language)
             except ReadTimeout:
-                return _groq_chat(prompt, language)
+                return llm_chat(prompt, language)
 
         fallback = "donnée indisponible" if _is_fr(language) else "insufficient data"
 

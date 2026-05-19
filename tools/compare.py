@@ -29,7 +29,7 @@ import utils.pipeline_log as pipeline_log
 from prompts.lang import glossary_block as _glossary_block_for
 from ui.graph import create_spider_graph_duo
 from requests.exceptions import ReadTimeout
-from utils.llm_client import _groq_chat
+from utils.llm_client import llm_chat
 
 # -----------------------------
 # Deterministic helpers
@@ -275,9 +275,9 @@ def _fetch_player(name: str, language: str = "English") -> dict:
 # -----------------------------
 def _call_twice(prompt_text: str, language: str) -> str:
     try:
-        return _groq_chat(prompt_text, language)
+        return llm_chat(prompt_text, language)
     except ReadTimeout:
-        return _groq_chat(prompt_text, language)
+        return llm_chat(prompt_text, language)
 
 def _photos_header_html(url_a: str, name_a: str, url_b: str, name_b: str) -> str:
     return (
