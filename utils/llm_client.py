@@ -29,7 +29,7 @@ def _groq_chat(user_content: str, language: str, model= model_chosen) -> str:
                 {"role": "user", "content": user_content},
             ],
             temperature=1,
-            max_tokens=8192,
+            max_tokens=1500,
             stream=True,
         )
 
@@ -52,7 +52,7 @@ def _groq_chat(user_content: str, language: str, model= model_chosen) -> str:
                     {"role": "user", "content": user_content},
                 ],
                 temperature=1,
-                max_tokens=8192,
+                max_tokens=1500,
                 stream=False,
             )
             result = (resp.choices[0].message.content or "").strip()

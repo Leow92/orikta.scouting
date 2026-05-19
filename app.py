@@ -4,6 +4,7 @@ import time
 import streamlit as st
 from agents.router import route_query
 from ui.branding import footer_brand
+from ui.themes import THEMES, get_theme_css
 import utils.pipeline_log as pipeline_log
 
 # ---------------- UI Strings (EN/FR) ---------------- #
@@ -22,10 +23,9 @@ UI_STRINGS = {
         "input_placeholder": "e.g. Analyze Cherki • Compare Mbappe vs Yamal - always put a big letter in beginning of player's name!",
         "generate": "Generate",
         "spinner": "🔎 Building report…",
-        "result_title": "🧠 Result",
         "meta_line": "⏱️ Generated in {s:.1f}s • Lang: {lang} • Styles: {styles}",
         "downloads_title": "⬇️ Download the Report",
-        
+        "sidebar_theme": "🎨 Theme",
     },
     "fr": {
         "title": "orikta.scouting",
@@ -41,9 +41,9 @@ UI_STRINGS = {
         "input_placeholder": "ex. Analyser Cherki • Comparer Mbappe vs Yamal - toujours mettre une majuscule au début du nom des joueurs",
         "generate": "Générer",
         "spinner": "🔎 Génération du rapport…",
-        "result_title": "🧠 Résultat",
         "meta_line": "⏱️ Généré en {s:.1f}s • Langue : {lang} • Styles : {styles}",
         "downloads_title": "⬇️ Téléchargez le Rapport",
+        "sidebar_theme": "🎨 Thème",
     },
 }
 
@@ -54,32 +54,10 @@ def _t(key: str) -> str:
     lang = _lang_code()
     return UI_STRINGS.get(lang, UI_STRINGS["en"]).get(key, UI_STRINGS["en"].get(key, key))
 
-# -------- Page config & CSS (high-contrast table headers) --------
+# -------- Page config & theme --------
 st.set_page_config(page_title="orikta.scouting — Single Player", page_icon="🪨", layout="wide")
-st.markdown("""
-<style>
-/* Base */
-.block-container { padding-top: 1rem; padding-bottom: 2rem; }
-hr { border: none; border-top: 1px solid #e5e7eb; margin: 24px 0; }
-.small { color:#6b7280; font-size: 0.9rem; }
-.kbd { padding: 2px 6px; border-radius: 4px; border:1px solid #d1d5db; }
-
-/* Tables (thèmes clair & sombre) */
-.stMarkdown table { width: 100%; border-collapse: collapse; }
-.stMarkdown th, .stMarkdown td { padding: 6px; border: 1px solid var(--orikta-border, #e5e7eb); }
-
-/* Clair par défaut */
-.stMarkdown th { background: var(--orikta-th-bg, #f8fafc); color: var(--orikta-th-text, #111); font-weight: 600; }
-/* On NE FORCE PAS la couleur des td : elles héritent du thème */
-
-/* Sombre */
-@media (prefers-color-scheme: dark) {
-  .stMarkdown th, .stMarkdown td { border-color: #374151; }
-  .stMarkdown th { background: #111827; color: #e5e7eb; }
-  /* Pas de couleur forcée sur td : le thème fournit déjà un texte clair */
-}
-</style>
-""", unsafe_allow_html=True)
+st.session_state.setdefault("theme_selector", "☀️ Classic Light")
+st.markdown(get_theme_css(THEMES.get(st.session_state.theme_selector, "light")), unsafe_allow_html=True)
 
 # -------- Sidebar: Language & Options --------
 # -------- Sidebar: Language & Options --------
@@ -99,7 +77,13 @@ with st.sidebar:
     st.session_state.language = "Français" if selection.startswith("Fr") else "English"
     language = st.session_state.language
 
-    # --- Removed Play Style section entirely ---
+    st.markdown(f"### {_t('sidebar_theme')}")
+    st.selectbox(
+        "Theme",
+        options=list(THEMES.keys()),
+        key="theme_selector",
+        label_visibility="collapsed",
+    )
 
     st.markdown("---")
     fast_preview = st.toggle(
@@ -265,7 +249,6 @@ def md_to_html(md_text: str, title: str = "orikta Report") -> str:
 # -------- Main Display --------
 if st.session_state.history:
     chosen = st.session_state.history[st.session_state.selected_history_index]
-    st.markdown(f"### {_t('result_title')}")
 
     display_pipeline_logs(chosen.get("logs", []), expanded=verbose)
 
