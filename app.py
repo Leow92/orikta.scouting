@@ -14,13 +14,13 @@ UI_STRINGS = {
         "caption": "Tactical scouting, analyse or compare any player(s).",
         "sidebar_language": "🌐 Language",
         "sidebar_fast_preview": "⚡ Fast preview (skip LLM)",
-        "sidebar_fast_preview_help": "Show presentation + scouting + grades + style matrix; skip LLM analysis for speed.",
+        "sidebar_fast_preview_help": "Skip LLM analysis for speed.",
         "sidebar_verbose": "Verbose logs",
         "sidebar_clear_history": "Clear history",
         "sidebar_history": "🕓 Prompt History",
         "sidebar_history_empty": "No history yet.",
         "input_label": "💬 Ask your question",
-        "input_placeholder": "e.g. Analyze Cherki • Compare Mbappe vs Yamal - always put a big letter in beginning of player's name!",
+        "input_placeholder": "e.g. create the report for Cherki • compare Mbappe vs Yamal",
         "generate": "Generate",
         "spinner": "🔎 Building report…",
         "meta_line": "⏱️ Generated in {s:.1f}s • Lang: {lang} • Styles: {styles}",
@@ -32,13 +32,13 @@ UI_STRINGS = {
         "caption": "Scouting tactique, analysez ou comparez n’importe quel joueur.",
         "sidebar_language": "🌐 Langue",
         "sidebar_fast_preview": "⚡ Aperçu rapide (sans LLM)",
-        "sidebar_fast_preview_help": "Affiche présentation + scouting + notes + matrice de style ; saute l’analyse LLM.",
+        "sidebar_fast_preview_help": "Saute l’analyse LLM.",
         "sidebar_verbose": "Logs détaillés",
         "sidebar_clear_history": "Effacer l’historique",
         "sidebar_history": "🕓 Historique des requêtes",
         "sidebar_history_empty": "Aucun historique.",
         "input_label": "💬 Saisissez votre requête",
-        "input_placeholder": "ex. Analyser Cherki • Comparer Mbappe vs Yamal - toujours mettre une majuscule au début du nom des joueurs",
+        "input_placeholder": "ex. génère le rapport de Cherki • compare Mbappe et Yamal",
         "generate": "Générer",
         "spinner": "🔎 Génération du rapport…",
         "meta_line": "⏱️ Généré en {s:.1f}s • Langue : {lang} • Styles : {styles}",
@@ -55,7 +55,11 @@ def _t(key: str) -> str:
     return UI_STRINGS.get(lang, UI_STRINGS["en"]).get(key, UI_STRINGS["en"].get(key, key))
 
 # -------- Page config & theme --------
-st.set_page_config(page_title="orikta.scouting — Single Player", page_icon="🪨", layout="wide")
+st.set_page_config(
+    page_title="orikta.scouting — Single Player",
+    page_icon="⚽",  # or use a custom icon (e.g., "🔵" or a local image)
+    layout="wide",  # or "wide" if you prefer
+)
 st.session_state.setdefault("theme_selector", "☀️ Classic Light")
 st.markdown(get_theme_css(THEMES.get(st.session_state.theme_selector, "light")), unsafe_allow_html=True)
 
