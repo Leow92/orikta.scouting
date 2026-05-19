@@ -13,7 +13,7 @@ from prompts.render import render
 from utils.llm_client import llm_route, ACTIVE_ROUTER_MODEL, LLM_PROVIDER
 import utils.pipeline_log as pipeline_log
 
-_ROUTER_SYSTEM = render("router.j2")
+_ROUTER_SYSTEM = render("router_v0.2.j2")
 
 # ------------------------------------------------------------------ #
 # LLM routing call                                                     #
@@ -75,6 +75,18 @@ def _default_out_of_scope(language: str) -> str:
     )
 
 
+def _default_blocked(language: str) -> str:
+    if language == "Français":
+        return (
+            "Je suis uniquement un assistant de **scouting football**. "
+            "Essayez : _Analyser Mbappé_ ou _Comparer Bellingham et Pedri_."
+        )
+    return (
+        "I'm a **football scouting assistant** and can only analyze or compare players. "
+        "Try: _Analyze Bellingham_ or _Compare Mbappe vs Yamal_."
+    )
+
+
 # ------------------------------------------------------------------ #
 # Public entry point                                                   #
 # ------------------------------------------------------------------ #
@@ -106,6 +118,11 @@ def route_query(user_query: str, skip_llm: bool = False) -> tuple[str, str]:
             return _no_player_msg(language), language
         pipeline_log.log(f"[router] Dispatching to compare → {players[:2]}")
         return compare_players(players[:2], language=language, skip_llm=skip_llm), language
+
+    if tool == "blocked":
+        pipeline_log.log("[router] Guardrail triggered — query blocked", level="warning")
+        msg = (routing.get("message") or "").strip() or _default_blocked(language)
+        return msg, language
 
     # out_of_scope
     pipeline_log.log("[router] Out of scope — returning guidance message", level="warning")
