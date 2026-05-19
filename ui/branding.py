@@ -8,7 +8,7 @@ def footer_brand():
         "orikta &nbsp;&middot;&nbsp; by leow92"
         "</span> &nbsp; "
         "<span style='opacity:0.3;font-size:10px;'>"
-        "| &nbsp;<a href='https://github.com/Leow92' target='_blank' "
+        "| &nbsp;<a href='https://github.com/Leow92/orikta.scouting' target='_blank' "
         "style='color:inherit;text-decoration:none;letter-spacing:0.1em;'>GitHub</a>"
         " &nbsp;|&nbsp; "
         "<a href='https://www.linkedin.com/in/leonard-baesen-wagner/' target='_blank' "

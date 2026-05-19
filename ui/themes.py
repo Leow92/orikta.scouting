@@ -27,6 +27,113 @@ hr { border: none; border-top: 1px solid var(--orikta-border, #e5e7eb); margin: 
 .stMarkdown table { width: 100%; border-collapse: collapse; }
 .stMarkdown th, .stMarkdown td { padding: 6px; border: 1px solid var(--orikta-border, #e5e7eb); }
 .stMarkdown th { background: var(--orikta-th-bg, #f8fafc); color: var(--orikta-th-text, #111); font-weight: 600; }
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+    .block-container { padding-top: 0.5rem; padding-bottom: 1rem; }
+    .main > div:first-child { padding-left: 8px !important; padding-right: 8px !important; }
+    
+    /* Typography - better mobile readability */
+    h1 { font-size: 1.5rem !important; letter-spacing: 0.5px !important; }
+    h2 { font-size: 1.25rem !important; }
+    h3 { font-size: 1.1rem !important; }
+    p, span, li { font-size: 0.95rem !important; line-height: 1.5 !important; }
+    
+    /* Input and buttons - larger touch targets */
+    [data-testid="stTextInput"] input { 
+        font-size: 1rem !important; 
+        padding: 14px 16px !important; 
+        min-height: 48px !important; 
+    }
+    [data-testid="baseButton-primary"] { 
+        padding: 14px 24px !important; 
+        font-size: 1rem !important; 
+        min-height: 48px !important; 
+    }
+    [data-testid="baseButton-secondary"] { 
+        padding: 12px 20px !important; 
+        font-size: 0.95rem !important; 
+        min-height: 44px !important; 
+    }
+    
+    /* Form layout - stack input and button vertically on mobile */
+    [data-testid="stForm"] > div:first-child { 
+        flex-direction: column !important; 
+        gap: 12px !important; 
+    }
+    [data-testid="stForm"] [data-testid="stTextInput"] { 
+        width: 100% !important; 
+        margin-bottom: 12px !important; 
+    }
+    
+    /* Tables - compact for mobile */
+    .stMarkdown table { font-size: 0.85rem !important; }
+    .stMarkdown th, .stMarkdown td { padding: 4px 6px !important; }
+    
+    /* Expanders and sidebar */
+    [data-testid="stExpander"] { font-size: 0.95rem !important; }
+    section[data-testid="stSidebar"] { padding: 12px !important; }
+    
+    /* Make main content area scrollable */
+    [data-testid="stAppViewContainer"] > .main { 
+        overflow-y: auto !important; 
+        max-height: calc(100vh - 140px) !important; 
+        -webkit-overflow-scrolling: touch !important; 
+    }
+    
+    /* Larger touch targets for all interactive elements */
+    [data-testid="stRadio"] > div, 
+    [data-testid="stToggle"] > div,
+    [data-testid="stCheckbox"] > div { 
+        min-height: 44px !important; 
+        padding: 8px 0 !important; 
+    }
+    [data-testid="stSelectbox"] > div > div, 
+    [data-testid="stButton"] > button { 
+        min-height: 44px !important; 
+    }
+    
+    /* Download buttons */
+    [data-testid="stDownloadButton"] > button { 
+        min-height: 44px !important; 
+        padding: 12px 20px !important; 
+        font-size: 0.95rem !important; 
+    }
+    
+    /* Adjust spacing */
+    .stCaption { font-size: 0.85rem !important; }
+    hr { margin: 16px 0 !important; }
+}
+
+/* Tablet responsiveness */
+@media (max-width: 1024px) and (min-width: 769px) {
+    .main > div:first-child { 
+        padding-left: 16px !important; 
+        padding-right: 16px !important; 
+    }
+    h1 { font-size: 1.8rem !important; }
+    [data-testid="stTextInput"] input { font-size: 0.95rem !important; }
+}
+
+/* Small tablets / large phones */
+@media (max-width: 768px) and (min-width: 480px) {
+    .main > div:first-child { 
+        padding-left: 12px !important; 
+        padding-right: 12px !important; 
+    }
+    [data-testid="stForm"] > div:first-child { 
+        flex-direction: row !important; 
+        flex-wrap: wrap !important; 
+    }
+    [data-testid="stForm"] [data-testid="stTextInput"] { 
+        flex: 1 1 calc(70% - 12px) !important; 
+        min-width: 200px !important; 
+    }
+    [data-testid="stForm"] [data-testid="baseButton-primary"] { 
+        flex: 0 0 calc(30% - 12px) !important; 
+        min-width: 120px !important; 
+    }
+}
 """
 
 # ── Classic Light ────────────────────────────────────────────────────────────

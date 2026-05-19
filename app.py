@@ -71,6 +71,11 @@ st.set_page_config(
     page_icon="⚽",
     layout="wide",
 )
+
+# Mobile responsiveness - inject viewport meta tag
+st.markdown("""
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+""", unsafe_allow_html=True)
 st.session_state.setdefault("theme_selector", "⚽ World Cup 2026")
 st.markdown(get_theme_css(THEMES.get(st.session_state.theme_selector, "worldcup")), unsafe_allow_html=True)
 
