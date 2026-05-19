@@ -123,7 +123,7 @@ def analyze_single_player_workflow(
 
         # ---- Prompt 2: synthesis paragraphs ----
         p_summary = render(
-            "player_summary.j2",
+            "player_summary_v0.2.j2",
             scout_pct_only_md=scout_pct_only_md,
             multi_style_md=multi_style_md or "",
             trend_block_md=trend_block_md or "",
