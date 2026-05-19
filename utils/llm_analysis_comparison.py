@@ -27,7 +27,7 @@ def compare_llm_workflow(
     fallback = "donnée indisponible" if _is_fr(language) else "insufficient data"
 
     prompt = render(
-        "comparison_deep.j2",
+        "comparison_deep_v0.2.j2",
         A_name=A_name,
         B_name=B_name,
         role_label=role_label,
