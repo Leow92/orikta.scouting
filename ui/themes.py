@@ -11,7 +11,7 @@ def get_theme_css(theme_key: str) -> str:
 
 _CREATIVE_TITLE = """
 [data-testid="stMarkdownContainer"] h1 {
-    color: #ffffff !important;
+    color: #DFFF00 !important;
     font-style: italic !important;
     text-transform: uppercase !important;
     letter-spacing: 2px !important;
