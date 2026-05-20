@@ -58,12 +58,56 @@ def _player_card_html(url: str, name: str, accent: str = "#4CAF50") -> str:
 # Trend analysis (API-football season-over-season)                    #
 # ------------------------------------------------------------------ #
 TREND_CANDIDATES = [
+    # Outfield
     "G+A per 90", "Goals per 90", "Assists per 90",
     "Key Passes per 90", "Pass Completion %",
     "Tackles per 90", "Interceptions per 90",
     "Dribble Success %", "Duels Won %",
     "Shots per 90", "Shot Accuracy %",
+    # Goalkeeper
+    "Save %", "Saves per 90", "Goals Conceded per 90",
 ]
+
+# Ordered display for GK scouting table (GK metrics first, then shared metrics)
+GK_METRIC_ORDER = [
+    "Save %", "Saves per 90", "Goals Conceded per 90",
+    "Pass Completion %", "Duels Won %",
+    "Fouls per 90", "Fouls Drawn per 90",
+    "Goals per 90", "Assists per 90",  # rare but possible (GK assists on set pieces)
+]
+
+# Pure outfield metrics that are noise for a GK (0.00 values)
+_OUTFIELD_ONLY: frozenset[str] = frozenset({
+    "G+A per 90", "Shots per 90", "Shot Accuracy %",
+    "Key Passes per 90", "Tackles per 90", "Interceptions per 90",
+    "Blocks per 90", "Dribbles per 90", "Dribble Success %",
+})
+
+
+def _gk_ordered_index(scout_df) -> list[str]:
+    """Return a GK-appropriate metric order, dropping pure outfield noise."""
+    all_metrics = list(scout_df.index)
+    seen: set[str] = set()
+    ordered: list[str] = []
+    # GK-priority metrics first
+    for m in GK_METRIC_ORDER:
+        if m in scout_df.index and m not in seen:
+            # Skip Goals/Assists per 90 if value is effectively 0 (not meaningful for GK)
+            if m in ("Goals per 90", "Assists per 90"):
+                val = scout_df.loc[m, "Per90"] if "Per90" in scout_df.columns else 0
+                try:
+                    if float(val) < 0.01:
+                        continue
+                except (TypeError, ValueError):
+                    continue
+            ordered.append(m)
+            seen.add(m)
+    # Remaining metrics that aren't pure outfield noise
+    for m in all_metrics:
+        if m not in seen and m not in _OUTFIELD_ONLY:
+            ordered.append(m)
+            seen.add(m)
+    return ordered
 
 def _trend_threshold(col: str) -> float:
     c = col.lower()
@@ -142,6 +186,7 @@ def _season_stats_md(
     prev_metrics: dict[str, float],
     current_season_year: int,
     language: str,
+    role_hint: str = "",
 ) -> str:
     if not current_metrics:
         return _nodata(language)
@@ -152,13 +197,20 @@ def _season_stats_md(
         language,
     )
 
-    preferred = [
-        "Goals per 90", "Assists per 90", "G+A per 90",
-        "Shots per 90", "Shot Accuracy %",
-        "Key Passes per 90", "Pass Completion %",
-        "Tackles per 90", "Interceptions per 90",
-        "Dribble Success %", "Duels Won %",
-    ]
+    if "gk" in role_hint.lower():
+        preferred = [
+            "Save %", "Saves per 90", "Goals Conceded per 90",
+            "Pass Completion %", "Duels Won %",
+            "Fouls per 90", "Fouls Drawn per 90",
+        ]
+    else:
+        preferred = [
+            "Goals per 90", "Assists per 90", "G+A per 90",
+            "Shots per 90", "Shot Accuracy %",
+            "Key Passes per 90", "Pass Completion %",
+            "Tackles per 90", "Interceptions per 90",
+            "Dribble Success %", "Duels Won %",
+        ]
 
     rows: list[tuple[str, str, str]] = []
     for metric in preferred:
@@ -479,8 +531,13 @@ def analyze_player(
             f"### 🧾 Rapport de scouting — {league_name} {season}–{season + 1}",
             language,
         )
+        is_gk = "gk" in role_hint.lower()
+        metric_index = _gk_ordered_index(display_df) if is_gk else list(display_df.index)
         _scout_rows = ["| Metric | Per90 | Percentile |", "|---|---:|---:|"]
-        for _metric, _row in display_df.iterrows():
+        for _metric in metric_index:
+            if _metric not in display_df.index:
+                continue
+            _row = display_df.loc[_metric]
             _p90 = _row["Per90"]
             _pct = _row["Percentile"]
             _p90_str = f"{float(_p90):.3f}" if pd.notna(_p90) else "—"
@@ -496,7 +553,7 @@ def analyze_player(
         prev_obj = prev_player_objs[0] if prev_player_objs else None
         current_metrics, prev_metrics = build_season_comparison(player_obj, prev_obj)
 
-        std2_md = _season_stats_md(current_metrics, prev_metrics, season, language)
+        std2_md = _season_stats_md(current_metrics, prev_metrics, season, language, role_hint=role_hint)
         trend_block_md, _ = build_trend_block_for_llm(current_metrics, prev_metrics, language)
 
         # ---- 11. Spider graph ----
