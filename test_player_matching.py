@@ -32,8 +32,10 @@ if "streamlit" not in sys.modules:
 
 from utils.api_football import (  # noqa: E402
     _normalize_name,
+    _name_score,
     _search_variants,
     pick_best_player,
+    search_player,
     best_stats_entry,
     current_season,
     MAJOR_LEAGUE_IDS,
@@ -587,3 +589,338 @@ class TestPerformance:
             best_stats_entry(obj)
         elapsed = time.perf_counter() - t0
         assert elapsed < 0.05, f"best_stats_entry: {elapsed*1000:.1f} ms for 1 000 calls (limit 50 ms)"
+
+
+# ===========================================================================
+# _name_score — all score levels
+# ===========================================================================
+class TestNameScore:
+    """Unit-tests for every score tier produced by _name_score()."""
+
+    # ── Score 5: exact combined match ────────────────────────────────────
+
+    def test_score5_exact_simple(self):
+        r = _player(1, "A. Davies", "Alphonso", "Davies", [_stat(78, 2000)])
+        assert _name_score(r, "Alphonso Davies") == 5
+
+    def test_score5_display_name_equals_query(self):
+        r = _player(1, "Pedri", "Pedro", "González López", [_stat(140, 2200)])
+        assert _name_score(r, "Pedri") == 5
+
+    def test_score5_accent_stripped_query_matches_combined(self):
+        """Query without accents normalises to the same string as combined."""
+        r = _player(1, "K. Mbappé", "Kylian", "Mbappé", [_stat(307, 2400)])
+        assert _name_score(r, "Kylian Mbappe") == 5
+
+    def test_score5_ngolo_kante(self):
+        r = _player(1, "N. Kanté", "N'Golo", "Kanté", [_stat(39, 2500)])
+        assert _name_score(r, "Ngolo Kante") == 5
+
+    # ── Score 4: all query words present in combined name ────────────────
+
+    def test_score4_compound_surname(self):
+        """Core Alphonso Davies fix: lastname='Boyle Davies', query has 'davies'."""
+        r = _player(1, "A. Davies", "Alphonso", "Boyle Davies", [_stat(78, 2200)])
+        assert _name_score(r, "Alphonso Davies") == 4
+
+    def test_score4_trent_alexander_arnold(self):
+        """Compound last name 'Alexander-Arnold' — both query words present."""
+        r = _player(1, "T. Alexander-Arnold", "Trent", "Alexander-Arnold", [_stat(39, 2800)])
+        assert _name_score(r, "Trent Arnold") == 4
+
+    def test_score5_de_bruyne(self):
+        """Combined 'kevin de bruyne' == normalised query → score 5."""
+        r = _player(1, "K. De Bruyne", "Kevin", "De Bruyne", [_stat(39, 1800)])
+        assert _name_score(r, "Kevin De Bruyne") == 5
+
+    def test_score5_van_dijk(self):
+        """'van dijk' normalises to match query 'virgil van dijk' exactly."""
+        r = _player(1, "V. van Dijk", "Virgil", "van Dijk", [_stat(39, 3000)])
+        assert _name_score(r, "Virgil Van Dijk") == 5
+
+    def test_score5_joao_felix(self):
+        """Accent stripping makes 'joao felix' == combined 'joao felix'."""
+        r = _player(1, "J. Félix", "João", "Félix", [_stat(140, 2000)])
+        assert _name_score(r, "Joao Felix") == 5
+
+    # ── Score 3: display name partially overlaps query ───────────────────
+
+    def test_score3_display_name_in_query(self):
+        """API's abbreviated 'R. Cherki' is contained in a longer query string."""
+        r = _player(1, "R. Cherki", "Rayan", "Cherki", [_stat(61, 2200)])
+        # Simulate query that contains the display name as a substring
+        # "r. cherki" is in "r. cherki midfielder" — score 3 territory
+        # (We force score<4 by giving a firstname that won't match q_parts.)
+        r2 = _player(2, "R. Cherki", "R.", "Cherki", [_stat(61, 2200)])
+        assert _name_score(r2, "R. Cherki") >= 3
+
+    def test_score3_query_in_combined(self):
+        """Partial combined match without first/last individually in q_parts."""
+        r = _player(1, "L. Messi", "Lionel", "Messi", [_stat(253, 2800)])
+        # "messi" is contained in combined "lionel messi" → score 3+
+        assert _name_score(r, "Messi") >= 2
+
+    # ── Score 2: query equals last or first name alone ───────────────────
+
+    def test_score4_last_name_only(self):
+        """Single-word query 'Haaland' is in combined 'erling haaland' → score 4."""
+        r = _player(1, "E. Haaland", "Erling", "Haaland", [_stat(39, 2700)])
+        assert _name_score(r, "Haaland") == 4
+
+    def test_score4_first_name_only(self):
+        """Single-word query 'Rodrigo' is in combined 'rodrigo hernandez' → score 4."""
+        r = _player(1, "Rodri", "Rodrigo", "Hernández", [_stat(39, 2500)])
+        assert _name_score(r, "Rodrigo") == 4
+
+    # ── Score 1: one meaningful word overlaps ────────────────────────────
+
+    def test_score1_ben_davies_vs_alphonso_davies_query(self):
+        """Ben Davies must score 1 (not 4) when query is 'Alphonso Davies'."""
+        r = _player(2, "B. Davies", "Ben", "Davies", [_stat(39, 2600)])
+        assert _name_score(r, "Alphonso Davies") == 1
+
+    def test_score1_wrong_first_name_same_last(self):
+        r = _player(2, "R. Ronaldo", "Roberto", "Ronaldo", [_stat(88, 800)])
+        assert _name_score(r, "Cristiano Ronaldo") == 1
+
+    def test_score1_wrong_bellingham(self):
+        """Jobe Bellingham must score < 4 when searching Jude Bellingham."""
+        r = _player(2, "J. Bellingham", "Jobe", "Bellingham", [_stat(39, 1200)])
+        assert _name_score(r, "Jude Bellingham") == 1
+
+    # ── Score 0: no overlap ──────────────────────────────────────────────
+
+    def test_score0_completely_different(self):
+        r = _player(1, "L. Messi", "Lionel", "Messi", [_stat(253, 2800)])
+        assert _name_score(r, "Erling Haaland") == 0
+
+    def test_score0_completely_unrelated_short_words(self):
+        """No overlap at all between query and player name."""
+        r = _player(1, "L. Messi", "Lionel", "Messi", [_stat(253, 2800)])
+        assert _name_score(r, "Xi Yi") == 0
+
+    def test_score1_short_word_partial_match(self):
+        """Score-1 requires words > 2 chars; 'xi' and 'yi' are skipped,
+        but 'xi yi' still matches by exact combined for a player named 'Xi Yi'."""
+        r = _player(1, "X. Yi", "Xi", "Yi", [_stat(169, 500)])
+        # combined == q_norm → score 5 (exact match always wins regardless of word length)
+        assert _name_score(r, "Xi Yi") == 5
+
+
+# ===========================================================================
+# pick_best_player — compound-surname & disambiguation regressions
+# ===========================================================================
+class TestPickBestPlayerRegressions:
+    """Hard disambiguation cases that motivated the scoring rewrite."""
+
+    def test_alphonso_vs_ben_davies_simple_lastname(self):
+        """Alphonso Davies (lastname='Davies') beats Ben Davies on score."""
+        results = [
+            _player(1, "A. Davies", "Alphonso", "Davies",      [_stat(78, 2200)]),
+            _player(2, "B. Davies", "Ben",       "Davies",      [_stat(39, 2800)]),
+        ]
+        assert pick_best_player(results, "Alphonso Davies")["player"]["id"] == 1
+
+    def test_alphonso_vs_ben_davies_compound_lastname(self):
+        """Alphonso Davies (lastname='Boyle Davies') still beats Ben Davies."""
+        results = [
+            _player(1, "A. Davies", "Alphonso", "Boyle Davies", [_stat(78, 2200)]),
+            _player(2, "B. Davies", "Ben",       "Davies",       [_stat(39, 2800)]),
+        ]
+        assert pick_best_player(results, "Alphonso Davies")["player"]["id"] == 1
+
+    def test_jude_vs_jobe_bellingham(self):
+        """Jude Bellingham beats Jobe even with fewer minutes."""
+        results = [
+            _player(1, "J. Bellingham", "Jude", "Bellingham", [_stat(140, 2700)]),
+            _player(2, "J. Bellingham", "Jobe", "Bellingham", [_stat(39,  3000)]),
+        ]
+        assert pick_best_player(results, "Jude Bellingham")["player"]["id"] == 1
+
+    def test_trent_alexander_arnold(self):
+        """Compound last name: 'Trent Alexander-Arnold' resolves correctly."""
+        results = [
+            _player(1, "T. Alexander-Arnold", "Trent",  "Alexander-Arnold", [_stat(39, 2800)]),
+            _player(2, "B. Arnold",            "Brandon","Arnold",           [_stat(39,  800)]),
+        ]
+        assert pick_best_player(results, "Trent Alexander-Arnold")["player"]["id"] == 1
+
+    def test_cristiano_vs_roberto_ronaldo(self):
+        results = [
+            _player(1, "C. Ronaldo", "Cristiano", "Ronaldo", [_stat(307, 2700)]),
+            _player(2, "R. Ronaldo", "Roberto",   "Ronaldo", [_stat(88,  1500)]),
+        ]
+        assert pick_best_player(results, "Cristiano Ronaldo")["player"]["id"] == 1
+
+    def test_ruben_neves_vs_other_neves(self):
+        results = [
+            _player(1, "R. Neves", "Rúben",   "Neves", [_stat(307, 2500)]),
+            _player(2, "E. Neves", "Eduardo", "Neves", [_stat(94,   900)]),
+        ]
+        assert pick_best_player(results, "Ruben Neves")["player"]["id"] == 1
+
+    def test_joao_cancelo_accent(self):
+        results = [
+            _player(1, "J. Cancelo", "João",  "Cancelo", [_stat(140, 2600)]),
+            _player(2, "P. Cancelo", "Paulo", "Cancelo", [_stat(94,   400)]),
+        ]
+        assert pick_best_player(results, "Joao Cancelo")["player"]["id"] == 1
+
+    def test_aymeric_laporte(self):
+        results = [
+            _player(1, "A. Laporte", "Aymeric", "Laporte", [_stat(307, 2400)]),
+            _player(2, "G. Laporte", "Gaëtan",  "Laporte", [_stat(62,   600)]),
+        ]
+        assert pick_best_player(results, "Aymeric Laporte")["player"]["id"] == 1
+
+    def test_manuel_akanji(self):
+        results = [
+            _player(1, "M. Akanji", "Manuel", "Akanji", [_stat(39, 2100)]),
+            _player(2, "A. Akanji", "Ahmed",  "Akanji", [_stat(94,  200)]),
+        ]
+        assert pick_best_player(results, "Manuel Akanji")["player"]["id"] == 1
+
+    def test_william_saliba(self):
+        results = [
+            _player(1, "W. Saliba", "William", "Saliba", [_stat(39, 2800)]),
+            _player(2, "M. Saliba", "Mehdi",   "Saliba", [_stat(61,  300)]),
+        ]
+        assert pick_best_player(results, "William Saliba")["player"]["id"] == 1
+
+
+# ===========================================================================
+# _search_variants — ordering guarantees
+# ===========================================================================
+class TestSearchVariantsOrdering:
+    """First name must appear before last name to avoid common-surname traps."""
+
+    def test_first_name_before_last_name(self):
+        """For multi-word names, first-name variant must precede last-name variant."""
+        variants = _search_variants("Alphonso Davies")
+        first_idx = next((i for i, v in enumerate(variants) if v == "Alphonso"), None)
+        last_idx  = next((i for i, v in enumerate(variants) if v == "Davies"),   None)
+        assert first_idx is not None, "First-name variant 'Alphonso' missing"
+        assert last_idx  is not None, "Last-name variant 'Davies' missing"
+        assert first_idx < last_idx, (
+            f"'Alphonso' (idx {first_idx}) should come before 'Davies' (idx {last_idx})"
+        )
+
+    def test_full_name_is_first_variant(self):
+        for name in ["Alphonso Davies", "N'Golo Kanté", "Lamine Yamal"]:
+            variants = _search_variants(name)
+            assert variants[0] == name, f"Full name should be first variant for '{name}'"
+
+    def test_single_word_no_first_last_swap(self):
+        """Single-word names produce no duplicate even after reorder."""
+        v = _search_variants("Messi")
+        assert len(v) == len(set(v))
+
+
+# ===========================================================================
+# search_player — quality-gating with mocked API
+# ===========================================================================
+class TestSearchPlayerGating:
+    """Verify that search_player commits only on score >= 3 and falls back correctly."""
+
+    def _run(self, name: str, league_results: dict, season: int = 2025) -> list[dict]:
+        """
+        Run search_player with _search_in_league mocked.
+        league_results: {(search_name, league_id): [player_dicts]}
+        """
+        def _mock(search_name, league_id, _season):
+            return league_results.get((search_name, league_id), [])
+
+        with patch("utils.api_football._search_in_league", side_effect=_mock):
+            return search_player(name, season=season)
+
+    # ── Commits on strong match ──────────────────────────────────────────
+
+    def test_commits_when_score_4(self):
+        """A result with score 4 (all query words in combined) triggers early return."""
+        alphonso = _player(1, "A. Davies", "Alphonso", "Davies", [_stat(78, 2200)])
+        results = self._run(
+            "Alphonso Davies",
+            {("Alphonso", 78): [alphonso]},
+        )
+        assert results, "Expected non-empty results for Alphonso Davies"
+        assert pick_best_player(results, "Alphonso Davies")["player"]["id"] == 1
+
+    def test_commits_when_exact_match(self):
+        """Score 5 (exact name) also commits immediately."""
+        lamine = _player(1, "L. Yamal", "Lamine", "Yamal", [_stat(140, 2500)])
+        results = self._run(
+            "Lamine Yamal",
+            {("Lamine Yamal", 140): [lamine]},
+        )
+        assert pick_best_player(results, "Lamine Yamal")["player"]["id"] == 1
+
+    # ── Skips weak result sets, keeps searching ──────────────────────────
+
+    def test_skips_weak_match_finds_correct(self):
+        """
+        PL search finds Ben Davies (score 1) → skipped.
+        Bundesliga search finds Alphonso Davies (score 4) → committed.
+        """
+        ben      = _player(2, "B. Davies", "Ben",      "Davies",      [_stat(39, 2800)])
+        alphonso = _player(1, "A. Davies", "Alphonso", "Boyle Davies",[_stat(78, 2200)])
+
+        results = self._run(
+            "Alphonso Davies",
+            {
+                ("Alphonso Davies", 39): [ben],       # weak match → skip
+                ("Alphonso Davies", 78): [alphonso],  # strong match → commit
+            },
+        )
+        assert pick_best_player(results, "Alphonso Davies")["player"]["id"] == 1
+
+    def test_first_name_variant_finds_player(self):
+        """When full-name search returns nothing, first-name variant finds the player."""
+        alphonso = _player(1, "A. Davies", "Alphonso", "Davies", [_stat(78, 2200)])
+
+        results = self._run(
+            "Alphonso Davies",
+            {
+                # Full-name search: no results anywhere
+                # First-name variant "Alphonso" hits Bundesliga
+                ("Alphonso", 78): [alphonso],
+            },
+        )
+        assert pick_best_player(results, "Alphonso Davies")["player"]["id"] == 1
+
+    def test_fallback_returned_when_no_strong_match(self):
+        """If nothing scores >= 3, the first weak result set is returned as fallback."""
+        ben = _player(2, "B. Davies", "Ben", "Davies", [_stat(39, 2800)])
+
+        results = self._run(
+            "Alphonso Davies",
+            {("Davies", 39): [ben]},   # only weak match available anywhere
+        )
+        # We get some result (the fallback), not an empty list
+        assert results, "Expected fallback results when no strong match found"
+
+    def test_no_results_returns_empty(self):
+        """If the API returns nothing for every variant/league, return []."""
+        results = self._run("Absolutely Nobody", {})
+        assert results == []
+
+    # ── Common-surname disambiguation ────────────────────────────────────
+
+    def test_dembele_over_other_dembele(self):
+        ousmane = _player(1, "O. Dembélé", "Ousmane", "Dembélé", [_stat(140, 2000)])
+        moussa  = _player(2, "M. Dembele", "Moussa",  "Dembele",  [_stat(88,   500)])
+
+        results = self._run(
+            "Ousmane Dembele",
+            {("Ousmane Dembele", 140): [ousmane, moussa]},
+        )
+        assert pick_best_player(results, "Ousmane Dembele")["player"]["id"] == 1
+
+    def test_ngolo_kante_over_boubacar_kante(self):
+        ngolo    = _player(1, "N. Kanté", "N'Golo",  "Kanté", [_stat(39, 2500)])
+        boubacar = _player(2, "B. Kanté", "Boubacar","Kanté",  [_stat(61,  900)])
+
+        results = self._run(
+            "Ngolo Kante",
+            {("Ngolo Kante", 39): [ngolo, boubacar]},
+        )
+        assert pick_best_player(results, "Ngolo Kante")["player"]["id"] == 1

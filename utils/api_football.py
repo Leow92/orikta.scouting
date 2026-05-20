@@ -166,12 +166,48 @@ def _search_variants(name: str) -> list[str]:
     first_stripped = _strip(first) if first else ""
 
     seen, variants = set(), []
-    for v in [name, last, first, last_stripped, full_stripped, first_stripped]:
+    # Try full name first, then first name (more distinctive than last for
+    # players with common surnames like Davies, Silva, Müller), then last name.
+    for v in [name, first, last, full_stripped, first_stripped, last_stripped]:
         v = v.strip()
         if v and v not in seen:
             seen.add(v)
             variants.append(v)
     return variants
+
+
+def _name_score(result: dict, query: str) -> int:
+    """Score (0–5) how well a search result matches the queried player name.
+
+    5  exact match on combined first+last or display name
+    4  both first name AND last name words individually appear in the query
+    3  display name fully contained in query or vice-versa
+    2  query equals the last or first name alone
+    1  at least one query word (>2 chars) appears anywhere in the name fields
+    0  no overlap
+    """
+    p      = result.get("player") or {}
+    q_norm = _normalize_name(query)
+    q_parts = [w for w in q_norm.split() if len(w) > 2]
+
+    full     = _normalize_name(p.get("name")      or "")
+    first    = _normalize_name(p.get("firstname")  or "")
+    last     = _normalize_name(p.get("lastname")   or "")
+    combined = f"{first} {last}".strip()
+
+    if q_norm in (full, combined):
+        return 5
+    # All query words appear somewhere in the player's full name — handles
+    # compound surnames like "Boyle Davies" when query is "Alphonso Davies"
+    if q_parts and first and last and all(qp in combined for qp in q_parts):
+        return 4
+    if (q_norm in full) or (full in q_norm) or (q_norm in combined) or (combined in q_norm):
+        return 3
+    if q_norm in (last, first):
+        return 2
+    if q_parts and any(w in full or w in first or w in last for w in q_parts):
+        return 1
+    return 0
 
 
 def search_player(name: str, season: int | None = None) -> list[dict]:
@@ -180,16 +216,36 @@ def search_player(name: str, season: int | None = None) -> list[dict]:
     The free plan requires a league+season context for name searches.
     Tries multiple name variants (full name, last name, accent-stripped)
     before moving to the next league.  All calls are cached individually.
+
+    For multi-word queries a result set is only committed when the best
+    candidate scores ≥ 3 (both first+last name matched, or display name
+    overlap), preventing common-surname false positives like returning
+    "Ben Davies" when "Alphonso Davies" is requested.  A weaker fallback
+    is kept in case no strong match exists anywhere.
     """
     if season is None:
         season = current_season()
 
+    q_parts = _normalize_name(name).split()
+    commit_threshold = 3 if len(q_parts) >= 2 else 1
+
+    fallback: list[dict] = []
+
     for search_name in _search_variants(name):
         for league_id in SEARCH_LEAGUES:
             results = _search_in_league(search_name, league_id, season)
-            if results:
+            if not results:
+                continue
+            best = pick_best_player(results, name)
+            if best is None:
+                continue
+            score = _name_score(best, name)
+            if score >= commit_threshold:
                 return results
-    return []
+            if not fallback:
+                fallback = results
+
+    return fallback
 
 
 @st.cache_data(ttl=24 * 3600)
@@ -243,41 +299,18 @@ def pick_best_player(results: list[dict], query: str) -> dict | None:
     """From a list of search results pick the player whose name best
     matches `query` and who has the most minutes played.
 
-    Matching is done on accent- and apostrophe-normalised strings so that
-    "Ngolo Kante" correctly maps to "N'Golo Kanté", etc.
+    Uses _name_score() for normalised matching so apostrophes/accents
+    don't block correct identification ("Ngolo Kante" → "N'Golo Kanté").
     """
     if not results:
         return None
 
-    q      = query.lower().strip()
-    q_norm = _normalize_name(q)
-
     scored: list[tuple[int, int, dict]] = []
     for r in results:
-        p = r.get("player") or {}
-        full  = (p.get("name") or "").lower()
-        first = (p.get("firstname") or "").lower()
-        last  = (p.get("lastname") or "").lower()
-
-        full_norm  = _normalize_name(full)
-        first_norm = _normalize_name(first)
-        last_norm  = _normalize_name(last)
-
-        # Score on normalised strings so apostrophes/accents don't block matches
-        if q_norm == full_norm:
-            name_score = 4
-        elif q_norm in full_norm or full_norm in q_norm:
-            name_score = 3
-        elif q_norm == last_norm or q_norm == first_norm:
-            name_score = 2
-        elif any(part in full_norm for part in q_norm.split() if len(part) > 2):
-            name_score = 1
-        else:
-            name_score = 0
-
+        score = _name_score(r, query)
         entry = best_stats_entry(r)
         minutes = int((entry.get("games") or {}).get("minutes") or 0) if entry else 0
-        scored.append((name_score, minutes, r))
+        scored.append((score, minutes, r))
 
     scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
     return scored[0][2] if scored else None

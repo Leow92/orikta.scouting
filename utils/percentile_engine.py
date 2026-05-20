@@ -200,6 +200,12 @@ def build_scout_df(
 
     percentiles = compute_percentiles(target, pool_metrics)
 
+    if not target:
+        raise RuntimeError(
+            "All statistics fields are null for this player entry — "
+            "the API returned minutes but no counting stats."
+        )
+
     rows = [
         {
             "Metric": metric,
