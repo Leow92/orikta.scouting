@@ -408,8 +408,14 @@ def compare_players(
             "|---|---:|---:|---:|---|",
         ]
         for _, r in det_df.head(12).iterrows():
+            a_str = f"{r['A_pct']:.0f}"
+            b_str = f"{r['B_pct']:.0f}"
+            if r["Winner"] == A_name:
+                a_str = f"**{a_str}**"
+            elif r["Winner"] == B_name:
+                b_str = f"**{b_str}**"
             winners_rows.append(
-                f"| {r['Metric']} | {r['w']:.2f} | {r['A_pct']:.0f} | {r['B_pct']:.0f} | {r['Winner']} |"
+                f"| {r['Metric']} | {r['w']:.2f} | {a_str} | {b_str} | {r['Winner']} |"
             )
         aligned_diff_md = "\n".join(winners_rows)
 

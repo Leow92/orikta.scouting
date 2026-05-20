@@ -690,6 +690,12 @@ class TestNameScore:
 
     # ── Score 0: no overlap ──────────────────────────────────────────────
 
+    def test_score1_single_name_display_does_not_score3(self):
+        """'Rayan' (single-name display) must NOT score 3 against 'Rayan Cherki'.
+        'rayan' is a substring of 'rayan cherki' but it is not a meaningful overlap."""
+        r = _player(99, "Rayan", "Rayan", "", [_stat(39, 1800)])
+        assert _name_score(r, "Rayan Cherki") <= 1
+
     def test_score0_completely_different(self):
         r = _player(1, "L. Messi", "Lionel", "Messi", [_stat(253, 2800)])
         assert _name_score(r, "Erling Haaland") == 0
@@ -914,6 +920,21 @@ class TestSearchPlayerGating:
             {("Ousmane Dembele", 140): [ousmane, moussa]},
         )
         assert pick_best_player(results, "Ousmane Dembele")["player"]["id"] == 1
+
+    def test_rayan_cherki_not_single_name_rayan(self):
+        """Single-name 'Rayan' player in PL must not block the real Rayan Cherki
+        found later (in Ligue 1).  This was the bug reported in the logs."""
+        wrong   = _player(407806, "Rayan",    "Rayan",  "",       [_stat(39, 1800)])
+        correct = _player(123456, "R. Cherki", "Rayan", "Cherki", [_stat(61, 2500)])
+
+        results = self._run(
+            "Rayan Cherki",
+            {
+                ("Rayan Cherki", 39): [wrong],    # PL: wrong single-name player → skip
+                ("Rayan Cherki", 61): [correct],  # Ligue 1: real Cherki → commit
+            },
+        )
+        assert pick_best_player(results, "Rayan Cherki")["player"]["id"] == 123456
 
     def test_ngolo_kante_over_boubacar_kante(self):
         ngolo    = _player(1, "N. Kanté", "N'Golo",  "Kanté", [_stat(39, 2500)])

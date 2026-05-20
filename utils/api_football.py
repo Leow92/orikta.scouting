@@ -201,7 +201,16 @@ def _name_score(result: dict, query: str) -> int:
     # compound surnames like "Boyle Davies" when query is "Alphonso Davies"
     if q_parts and first and last and all(qp in combined for qp in q_parts):
         return 4
-    if (q_norm in full) or (full in q_norm) or (q_norm in combined) or (combined in q_norm):
+    # Guard the "X in q_norm" directions: a single-word token ("Rayan") must not
+    # spuriously match as a prefix of a multi-word query ("Rayan Cherki").
+    _full_multi = len(full.split()) > 1
+    _comb_multi = len(combined.split()) > 1
+    if (
+        (q_norm in full)
+        or (_full_multi and full in q_norm)
+        or (q_norm in combined)
+        or (_comb_multi and combined in q_norm)
+    ):
         return 3
     if q_norm in (last, first):
         return 2

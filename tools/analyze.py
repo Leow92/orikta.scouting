@@ -160,7 +160,7 @@ def _season_stats_md(
         "Dribble Success %", "Duels Won %",
     ]
 
-    rows = []
+    rows: list[tuple[str, str, str]] = []
     for metric in preferred:
         curr = current_metrics.get(metric)
         prev = prev_metrics.get(metric)
@@ -168,13 +168,21 @@ def _season_stats_md(
             continue
         curr_str = f"{curr:.2f}" if curr is not None else "—"
         prev_str = f"{prev:.2f}" if prev is not None else "—"
-        rows.append({"Metric": metric, "Current": curr_str, "Previous": prev_str})
+        if curr is not None and prev is not None:
+            if curr > prev:
+                curr_str = f"**{curr_str}**"
+            elif prev > curr:
+                prev_str = f"**{prev_str}**"
+        rows.append((metric, curr_str, prev_str))
 
     if not rows:
         return _nodata(language)
 
-    df = pd.DataFrame(rows).set_index("Metric")
-    return f"{title}\n\n{df.to_markdown(tablefmt='pipe', index=True)}"
+    curr_yr = f"{current_season_year}–{current_season_year + 1}"
+    prev_yr = f"{current_season_year - 1}–{current_season_year}"
+    md_rows = [f"| Metric | {curr_yr} | {prev_yr} |", "|---|---:|---:|"]
+    md_rows += [f"| {m} | {c} | {p} |" for m, c, p in rows]
+    return f"{title}\n\n" + "\n".join(md_rows)
 
 
 # ------------------------------------------------------------------ #
@@ -441,7 +449,17 @@ def analyze_player(
             f"### 🧾 Rapport de scouting — {league_name} {season}–{season + 1}",
             language,
         )
-        scout_md = display_df.to_markdown(tablefmt="pipe", index=True)
+        _scout_rows = ["| Metric | Per90 | Percentile |", "|---|---:|---:|"]
+        for _metric, _row in display_df.iterrows():
+            _p90 = _row["Per90"]
+            _pct = _row["Percentile"]
+            _p90_str = f"{float(_p90):.3f}" if pd.notna(_p90) else "—"
+            if pd.notna(_pct):
+                _pct_str = f"**{float(_pct):.1f}**" if float(_pct) >= 75 else f"{float(_pct):.1f}"
+            else:
+                _pct_str = "—"
+            _scout_rows.append(f"| {_metric} | {_p90_str} | {_pct_str} |")
+        scout_md = "\n".join(_scout_rows)
 
         # ---- 10. Season comparison / trends ----
         prev_player_objs = get_player_by_id(player_id, season - 1) if player_id else []
