@@ -41,6 +41,14 @@ def _normalize_role(role_hint: Optional[str]) -> Tuple[str, Optional[str]]:
     if not role_hint:
         return "mf", None
     s = role_hint.lower().strip()
+
+    # Fast path: explicit "base:subrole" notation (e.g. "df:fb", "mf:cm")
+    if ":" in s:
+        base_part, sub_part = s.split(":", 1)
+        base_part, sub_part = base_part.strip(), sub_part.strip()
+        if base_part in BASE_ROLES and sub_part in (SUBROLES_BY_BASE.get(base_part) or set()):
+            return base_part, sub_part
+
     tokens = [t for t in (s.replace("_", " ").replace("-", " ").replace("/", " ").split()) if t]
 
     for t in tokens + [s]:
@@ -68,14 +76,15 @@ def _normalize_role(role_hint: Optional[str]) -> Tuple[str, Optional[str]]:
 
 DEFAULT_WEIGHTS: Dict[str, Dict[str, float]] = {
     "fw": {
-        "Goals per 90":      0.22,
-        "G+A per 90":        0.16,
-        "Shots per 90":      0.10,
-        "Shot Accuracy %":   0.10,
-        "Key Passes per 90": 0.12,
+        # Primary output — goals and overall contribution
+        "Goals per 90":      0.25,
+        "G+A per 90":        0.13,
+        "Shot Accuracy %":   0.12,  # finishing efficiency
+        "Shots per 90":      0.11,
         "Assists per 90":    0.10,
         "Dribble Success %": 0.10,
-        "Duels Won %":       0.06,
+        "Key Passes per 90": 0.08,  # lower: creation is a secondary fw trait
+        "Duels Won %":       0.07,
         "Dribbles per 90":   0.04,
     },
     "mf": {
@@ -99,76 +108,91 @@ DEFAULT_WEIGHTS: Dict[str, Dict[str, float]] = {
         "Key Passes per 90":    0.08,
     },
     "gk": {
-        "Save %":                  0.30,
-        "Goals Conceded per 90":   0.25,  # negative metric
-        "Saves per 90":            0.20,
-        "Pass Completion %":       0.12,
-        "Duels Won %":             0.13,
+        # Save % measures shot-stopping quality; Goals Conceded is the outcome.
+        # Saves per 90 is removed — it rewards GKs behind poor defences (more shots faced).
+        "Save %":                  0.50,
+        "Goals Conceded per 90":   0.35,  # negative metric — inverted
+        "Pass Completion %":       0.10,  # sweeper-keeper distribution
+        "Duels Won %":             0.05,  # 1v1 situations — minor
     },
 }
 
 SUBROLE_WEIGHTS: Dict[str, Dict[str, float]] = {
     "cb": {
-        "Duels Won %":          0.12,
-        "Blocks per 90":        0.10,
-        "Tackles per 90":       0.08,
-        "Interceptions per 90": 0.08,
-        "Pass Completion %":    0.06,
+        # Aerial/physical dominance + positional reading; build-up secondary
+        "Duels Won %":          0.22,  # headers, challenges — core CB metric
+        "Interceptions per 90": 0.18,  # reading the game
+        "Blocks per 90":        0.14,  # shot-blocking / last-ditch
+        "Tackles per 90":       0.12,  # ground challenges
+        "Pass Completion %":    0.06,  # contributing to build-up
     },
     "fb": {
-        "Dribbles per 90":   0.12,
-        "Key Passes per 90": 0.12,
-        "Assists per 90":    0.10,
-        "Tackles per 90":    0.06,
-        "Duels Won %":       0.06,
+        # Modern full-back: offensive width + defensive resilience
+        "Key Passes per 90":    0.16,  # chance creation from wide
+        "Dribble Success %":    0.12,  # quality of attacking runs
+        "Assists per 90":       0.12,  # end product
+        "Dribbles per 90":      0.10,  # volume of attacking overlaps
+        "Tackles per 90":       0.06,  # defensive duty
+        "Duels Won %":          0.04,  # defensive resilience
     },
     "dm": {
-        "Tackles per 90":       0.12,
-        "Interceptions per 90": 0.12,
-        "Duels Won %":          0.10,
-        "Pass Completion %":    0.08,
-        "Blocks per 90":        0.06,
-        "Key Passes per 90":    0.04,
+        # Defensive screen: protect the backline, recycle possession
+        "Tackles per 90":       0.20,  # primary defensive duty
+        "Interceptions per 90": 0.16,  # reading attacks
+        "Duels Won %":          0.14,  # physicality in midfield
+        "Pass Completion %":    0.10,  # connecting defence to attack
+        "Blocks per 90":        0.08,  # screening backline
+        # Key Passes removed: DM creation is secondary, leaks from mf base
     },
     "cm": {
-        "Key Passes per 90":    0.12,
+        # Box-to-box: balance creation, distribution, defensive coverage
+        "Key Passes per 90":    0.14,
         "Pass Completion %":    0.10,
         "Assists per 90":       0.08,
-        "Tackles per 90":       0.06,
-        "Dribbles per 90":      0.06,
-        "Interceptions per 90": 0.06,
+        "Tackles per 90":       0.08,  # box-to-box defensive contribution
+        "Interceptions per 90": 0.07,
+        "Dribble Success %":    0.07,  # quality over raw dribble count
         "Goals per 90":         0.04,
     },
     "am": {
-        "Key Passes per 90": 0.14,
-        "Assists per 90":    0.12,
-        "G+A per 90":        0.10,
-        "Dribble Success %": 0.10,
-        "Dribbles per 90":   0.08,
-        "Goals per 90":      0.08,
+        # Creative hub + goalscoring threat; shooting efficiency added
+        "Key Passes per 90":  0.18,   # primary creative output
+        "Assists per 90":     0.14,
+        "Goals per 90":       0.13,   # modern AMs are expected to score
+        "Dribble Success %":  0.10,
+        "G+A per 90":         0.08,
+        "Shot Accuracy %":    0.07,   # clinical when shooting
+        "Dribbles per 90":    0.04,
     },
     "wm": {
-        "Dribbles per 90":   0.12,
-        "Dribble Success %": 0.10,
-        "Key Passes per 90": 0.10,
-        "Assists per 90":    0.10,
-        "G+A per 90":        0.06,
+        # Wide midfielder: dribbling threat + scoring + creating
+        "Dribble Success %":  0.16,   # elite wide players win their dribbles
+        "Goals per 90":       0.12,   # wide mids contribute heavily to goals
+        "Dribbles per 90":    0.10,
+        "Key Passes per 90":  0.10,
+        "Assists per 90":     0.10,
+        "Shot Accuracy %":    0.08,   # cutting inside to shoot
+        "G+A per 90":         0.06,
     },
     "st": {
-        "Goals per 90":    0.18,
-        "G+A per 90":      0.12,
-        "Shots per 90":    0.12,
-        "Shot Accuracy %": 0.10,
-        "Duels Won %":     0.08,
-        "Dribbles per 90": 0.04,
+        # Pure striker: goals, efficiency, threat volume, physicality
+        "Goals per 90":      0.26,   # the primary striker metric
+        "Shot Accuracy %":   0.16,   # clinical finishing
+        "G+A per 90":        0.14,   # holistic output
+        "Shots per 90":      0.12,   # volume of threat
+        "Duels Won %":       0.10,   # hold-up play / aerial presence
+        "Assists per 90":    0.04,   # secondary — STs do assist occasionally
+        # Dribbles per 90 removed: not a primary ST metric
     },
     "w": {
-        "Dribbles per 90":   0.14,
-        "Dribble Success %": 0.12,
-        "Key Passes per 90": 0.12,
-        "Assists per 90":    0.10,
-        "G+A per 90":        0.08,
-        "Goals per 90":      0.06,
+        # Winger: pace, dribbling quality, goals + creation
+        "Dribble Success %":   0.20,  # the defining winger trait
+        "Goals per 90":        0.16,  # modern wingers are primary scorers
+        "Dribbles per 90":     0.12,
+        "Key Passes per 90":   0.10,
+        "Assists per 90":      0.10,
+        "Shot Accuracy %":     0.08,  # cutting inside / finishing
+        "G+A per 90":          0.06,
     },
 }
 

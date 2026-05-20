@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 import os
+import time
 from datetime import date
 import requests
 import streamlit as st
@@ -129,15 +130,32 @@ def _headers() -> dict[str, str]:
     return {"x-apisports-key": _API_KEY}
 
 
+_RATE_LIMIT_RETRIES = 4
+_RATE_LIMIT_BASE_DELAY = 3.0  # seconds; doubles on each retry
+
+
 def _get(endpoint: str, params: dict, timeout: int = 20) -> dict:
-    resp = requests.get(
-        f"{_BASE}/{endpoint}",
-        headers=_headers(),
-        params=params,
-        timeout=timeout,
-    )
-    resp.raise_for_status()
-    return resp.json()
+    """HTTP GET with automatic retry on 429 Too Many Requests.
+
+    Respects the Retry-After response header when present; otherwise
+    uses exponential backoff starting at _RATE_LIMIT_BASE_DELAY seconds.
+    """
+    for attempt in range(_RATE_LIMIT_RETRIES + 1):
+        resp = requests.get(
+            f"{_BASE}/{endpoint}",
+            headers=_headers(),
+            params=params,
+            timeout=timeout,
+        )
+        if resp.status_code == 429 and attempt < _RATE_LIMIT_RETRIES:
+            retry_after = resp.headers.get("Retry-After")
+            delay = float(retry_after) if retry_after else _RATE_LIMIT_BASE_DELAY * (2 ** attempt)
+            time.sleep(delay)
+            continue
+        resp.raise_for_status()
+        return resp.json()
+    resp.raise_for_status()  # exhausted retries — surface the error
+    return {}  # unreachable, satisfies type checker
 
 
 # ------------------------------------------------------------------ #
