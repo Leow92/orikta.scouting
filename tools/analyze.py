@@ -242,13 +242,32 @@ def _merge_profile_items(profile: dict) -> list[dict]:
             seen.add(a["label"].lower())
     return merged
 
-def _profile_table_md(full_name: str, items: list[dict], language: str) -> str:
+def _profile_table_md(
+    full_name: str,
+    items: list[dict],
+    language: str,
+    competitions: list[dict] | None = None,
+) -> str:
     title = _t("### 👤 Player Presentation", "### 👤 Présentation du Joueur", language)
     if not items:
         no_data = _t("_(No bio details found)_", "_(Aucune information trouvée)_", language)
-        return f"{title}\n\n**{full_name}**\n\n{no_data}".strip()
-    rows = "\n".join(f"| **{it['label']}** | {it['value']} |" for it in items)
-    return f"{title}\n\n**{full_name}**\n\n| Field | Value |\n|---|---|\n{rows}".strip()
+        base = f"{title}\n\n**{full_name}**\n\n{no_data}"
+    else:
+        rows = "\n".join(f"| **{it['label']}** | {it['value']} |" for it in items)
+        base = f"{title}\n\n**{full_name}**\n\n| Field | Value |\n|---|---|\n{rows}"
+
+    if competitions:
+        comp_title = _t(
+            "### 🏆 Season Competitions",
+            "### 🏆 Compétitions de la saison",
+            language,
+        )
+        comp_rows = ["| Competition | Apps | Goals | Assists |", "|---|---:|---:|---:|"]
+        for c in competitions:
+            comp_rows.append(f"| {c['name']} | {c['apps']} | {c['goals']} | {c['assists']} |")
+        return base.strip() + "\n\n" + comp_title + "\n\n" + "\n".join(comp_rows)
+
+    return base.strip()
 
 # ------------------------------------------------------------------ #
 # Shared numeric helper (used by compare.py via import)               #
@@ -316,6 +335,16 @@ def analyze_player(
     player_id = player_info.get("id")
     pipeline_log.log(f"[analyze] Matched → {full_name} (id={player_id})", level="success")
 
+    # Replace the league-filtered search result with the full player object
+    # (id-only query returns statistics for all competitions: CL, cups, etc.)
+    if player_id:
+        _full_objs = get_player_by_id(player_id, season)
+        if _full_objs:
+            player_obj = _full_objs[0]
+            pipeline_log.log(
+                f"[analyze] Full player fetched: {len(player_obj.get('statistics', []))} competition(s)"
+            )
+
     entry = best_stats_entry(player_obj)
     if not entry:
         return f"❌ No statistics available for **{full_name}** in season {season}."
@@ -344,7 +373,8 @@ def analyze_player(
         pipeline_log.log(f"[analyze] Scout DataFrame built ({len(scout_df)} metrics)")
         profile = build_profile(player_obj)
         items = _merge_profile_items(profile)
-        presentation_md = _profile_table_md(full_name, items, language)
+        competitions = profile.get("competitions", [])
+        presentation_md = _profile_table_md(full_name, items, language, competitions=competitions)
 
         photo_url = player_info.get("photo")
         player_photo_html = (

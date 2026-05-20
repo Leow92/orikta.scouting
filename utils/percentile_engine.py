@@ -10,7 +10,7 @@
 from __future__ import annotations
 import numpy as np
 import pandas as pd
-from utils.api_football import best_stats_entry
+from utils.api_football import best_stats_entry, CUP_COMPETITION_IDS
 
 # Maps API-football position strings to our role taxonomy
 POSITION_MAP: dict[str, str] = {
@@ -227,6 +227,12 @@ def get_position_str(player_obj: dict) -> str:
     return "Midfielder"
 
 
+def _is_cup_by_name(name: str) -> bool:
+    """Detect cup competitions by name when the league ID isn't in CUP_COMPETITION_IDS."""
+    n = name.lower()
+    return any(kw in n for kw in ("cup", "pokal", "coupe", "copa", "coppa", "taça", "beker", "puchar", "copa"))
+
+
 def build_profile(player_obj: dict) -> dict:
     """Build a profile dict compatible with the existing presentation layer.
 
@@ -263,6 +269,8 @@ def build_profile(player_obj: dict) -> dict:
         apps    = (entry.get("games")  or {}).get("appearences")
         mins    = (entry.get("games")  or {}).get("minutes")
         rating  = (entry.get("games")  or {}).get("rating")
+        goals_raw   = (entry.get("goals") or {}).get("total")
+        assists_raw = (entry.get("goals") or {}).get("assists")
         if team:
             attrs.append({"label": "Club", "value": team})
         if league:
@@ -272,14 +280,39 @@ def build_profile(player_obj: dict) -> dict:
             attrs.append({"label": "Appearances", "value": str(apps)})
         if mins is not None:
             attrs.append({"label": "Minutes", "value": str(mins)})
+        if goals_raw is not None:
+            attrs.append({"label": "Goals", "value": str(int(goals_raw))})
+        if assists_raw is not None:
+            attrs.append({"label": "Assists", "value": str(int(assists_raw))})
         if rating:
             attrs.append({"label": "Avg Rating", "value": str(round(float(rating), 2))})
+
+    # Collect stats from cup competitions (European + national)
+    competitions: list[dict] = []
+    for stat in player_obj.get("statistics", []):
+        lg = stat.get("league") or {}
+        lg_id = lg.get("id", 0)
+        lg_name = lg.get("name", "")
+        if lg_id not in CUP_COMPETITION_IDS and not _is_cup_by_name(lg_name):
+            continue
+        comp_apps    = (stat.get("games") or {}).get("appearences")
+        comp_goals   = (stat.get("goals") or {}).get("total")
+        comp_assists = (stat.get("goals") or {}).get("assists")
+        if not comp_apps:
+            continue
+        competitions.append({
+            "name":    lg_name or "Unknown Cup",
+            "apps":    str(comp_apps),
+            "goals":   str(int(comp_goals)) if comp_goals is not None else "—",
+            "assists": str(int(comp_assists)) if comp_assists is not None else "—",
+        })
 
     return {
         "name": p.get("name"),
         "attributes": attrs,
         "paragraphs": [],
         "position_hint": POSITION_MAP.get(raw_pos),
+        "competitions": competitions,
     }
 
 

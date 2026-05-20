@@ -15,6 +15,38 @@ load_dotenv()
 _API_KEY = os.getenv("API_FOOTBALL_KEY")
 _BASE = "https://v3.football.api-sports.io"
 
+# European and national cup competition IDs.
+EUROPEAN_CUP_IDS: set[int] = {
+    2,    # UEFA Champions League
+    3,    # UEFA Europa League
+    848,  # UEFA Europa Conference League
+    531,  # UEFA Super Cup
+}
+
+NATIONAL_CUP_IDS: set[int] = {
+    45,   # FA Cup (England)
+    48,   # EFL Cup / Carabao Cup (England)
+    66,   # Coupe de France
+    81,   # DFB-Pokal (Germany)
+    137,  # Coppa Italia
+    143,  # Copa del Rey (Spain)
+    96,   # Taça de Portugal (Portugal)
+    90,   # KNVB Beker (Netherlands)
+    146,  # Belgian Cup
+    204,  # Turkish Cup
+    209,  # Scottish FA Cup
+    199,  # Greek Cup
+    120,  # Norwegian Cup (NM Cupen)
+    114,  # Svenska Cupen
+    236,  # Russian Cup
+    279,  # Ukrainian Cup
+    257,  # US Open Cup
+    73,   # Copa do Brasil
+    308,  # King Cup (Saudi Arabia)
+}
+
+CUP_COMPETITION_IDS: set[int] = EUROPEAN_CUP_IDS | NATIONAL_CUP_IDS
+
 # League IDs used to prefer real-competition stats over cups / lower divisions.
 MAJOR_LEAGUE_IDS: set[int] = {
     # Big-5 Europe
