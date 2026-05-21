@@ -1,13 +1,8 @@
 # ui/themes.py
 """Visual themes for orikta.scouting injected via st.markdown CSS."""
 
-THEMES = {
-    "☀️ Classic": "light",
-    "⚽ World Cup 2026": "worldcup",
-}
-
-def get_theme_css(theme_key: str) -> str:
-    return f"<style>{_THEMES.get(theme_key, _LIGHT)}</style>"
+def get_theme_css() -> str:
+    return f"<style>{_WORLDCUP}</style>"
 
 _CREATIVE_TITLE = """
 [data-testid="stMarkdownContainer"] h1 {
@@ -238,4 +233,3 @@ section[data-testid="stSidebar"] span:not(.stBadge) { color: #e2e8f0 !important;
 [data-testid="stCaptionContainer"] { color: #93c5fd !important; }
 """
 
-_THEMES = {"light": _LIGHT, "worldcup": _WORLDCUP}

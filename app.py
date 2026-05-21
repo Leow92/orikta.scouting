@@ -2,7 +2,7 @@ import time
 import streamlit as st
 from agents.router import route_query
 from ui.branding import footer_brand
-from ui.themes import THEMES, get_theme_css
+from ui.themes import get_theme_css
 import utils.pipeline_log as pipeline_log
 
 # ---------------- UI Strings (EN/FR) ---------------- #
@@ -26,7 +26,6 @@ UI_STRINGS = {
         "pipeline_logs_title": "🪵 Pipeline logs",
         "meta_line": "⏱️ Generated in {s:.1f}s • Lang: {lang} • Styles: {styles}",
         "downloads_title": "⬇️ Download the Report",
-        "sidebar_theme": "🎨 Theme",
     },
     "fr": {
         "title": "orikta.scouting",
@@ -47,7 +46,6 @@ UI_STRINGS = {
         "pipeline_logs_title": "🪵 Logs pipeline",
         "meta_line": "⏱️ Généré en {s:.1f}s • Langue : {lang} • Styles : {styles}",
         "downloads_title": "⬇️ Téléchargez le Rapport",
-        "sidebar_theme": "🎨 Thème",
     },
 }
 
@@ -76,8 +74,7 @@ st.set_page_config(
 st.markdown("""
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 """, unsafe_allow_html=True)
-st.session_state.setdefault("theme_selector", "⚽ World Cup 2026")
-st.markdown(get_theme_css(THEMES.get(st.session_state.theme_selector, "worldcup")), unsafe_allow_html=True)
+st.markdown(get_theme_css(), unsafe_allow_html=True)
 
 # -------- Sidebar: Language & Options --------
 with st.sidebar:
@@ -95,14 +92,6 @@ with st.sidebar:
 
     st.session_state.language = "Français" if selection.startswith("Fr") else "English"
     language = st.session_state.language
-
-    st.markdown(f"### {_t('sidebar_theme')}")
-    st.selectbox(
-        "Theme",
-        options=list(THEMES.keys()),
-        key="theme_selector",
-        label_visibility="collapsed",
-    )
 
     st.markdown("---")
     fast_preview = st.toggle(

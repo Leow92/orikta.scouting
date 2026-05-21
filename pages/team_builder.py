@@ -4,7 +4,7 @@
 
 import streamlit as st
 
-from ui.themes import THEMES, get_theme_css
+from ui.themes import get_theme_css
 from ui.branding import footer_brand
 from ui.pitch import create_pitch_figure
 from tools.team_builder import (
@@ -18,11 +18,13 @@ st.set_page_config(
     page_icon="🏗️",
     layout="wide",
 )
+st.markdown("""
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+""", unsafe_allow_html=True)
 
-# ── Sidebar: same theme + language controls as app.py ───────────────
-# Using identical session state keys ensures both pages share the setting.
-st.session_state.setdefault("theme_selector", "⚽ World Cup 2026")
 st.session_state.setdefault("language", "English")
+
+st.markdown(get_theme_css(), unsafe_allow_html=True)
 
 with st.sidebar:
     st.markdown("### 🌐 Language")
@@ -36,19 +38,6 @@ with st.sidebar:
         label_visibility="collapsed",
     )
     st.session_state.language = "Français" if selection.startswith("Fr") else "English"
-
-    st.markdown("### 🎨 Theme")
-    st.selectbox(
-        "Theme",
-        options=list(THEMES.keys()),
-        key="theme_selector",
-        label_visibility="collapsed",
-    )
-
-st.markdown(
-    get_theme_css(THEMES.get(st.session_state.theme_selector, "worldcup")),
-    unsafe_allow_html=True,
-)
 
 # ── Language helper ──────────────────────────────────────────────────
 _lang = "fr" if str(st.session_state.get("language", "English")).lower().startswith("fr") else "en"
