@@ -22,3 +22,5 @@ archive/
 
 # --- Large test data ---
 test_player_matching.py
+test_scraping.py
+test_groq.py

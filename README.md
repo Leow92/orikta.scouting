@@ -8,6 +8,7 @@ It fetches player statistics from the **API-football** REST API, computes determ
 ## Features
 
 - Analyze a single player or compare two players side-by-side.
+- **Team Builder**: select a formation, assign players to slots, and get team-wide grades on a visual pitch diagram.
 - Deterministic scores: role fit, head-to-head, profile similarity, style fit matrix.
 - **Fast preview**: skip LLM for instant, deterministic output.
 - Bilingual UI / LLM output: English & Français.
@@ -82,6 +83,16 @@ Mbappe vs Mohamedsalah
 
 ---
 
+## Team Builder
+
+Navigate to the **Team Builder** page (sidebar) to:
+
+1. Pick a formation (4-3-3, 4-4-2, 4-2-3-1, 3-5-2, …)
+2. Enter a player name for each slot — the app fetches their stats and computes a role-fit grade
+3. View the squad on an interactive pitch diagram with per-zone and overall team scores
+
+---
+
 ## Deterministic vs LLM
 
 | Mode | Description |
@@ -96,10 +107,12 @@ Mbappe vs Mohamedsalah
 
 ```
 app.py                              # Streamlit UI, session state, history
+pages/team_builder.py               # Team Builder multi-page app
 agents/router.py                    # LLM-based intent router (analyze / compare / out_of_scope)
 tools/analyze.py                    # Single-player pipeline
 tools/compare.py                    # Two-player pipeline
 tools/grading.py                    # Role weights, grading, play-style presets
+tools/team_builder.py               # Formation definitions, slot fetch & grade, team scoring
 utils/api_football.py               # REST client for API-football v3
 utils/percentile_engine.py          # Per-90 conversion, percentile computation, scout DataFrame
 utils/llm_client.py                 # Mistral / Groq LLM client (provider-agnostic API)
@@ -113,6 +126,7 @@ prompts/comparison_deep.j2          # Comparison narrative template
 prompts/lang.py                     # lang_constraint(), glossary_block(), role_guide()
 prompts/render.py                   # Jinja2 renderer (auto-injects is_fr)
 ui/graph.py                         # Spider / radar charts (Plotly)
+ui/pitch.py                         # Interactive pitch diagram (Plotly)
 ui/themes.py                        # CSS themes (World Cup 2026, light)
 ui/branding.py                      # Footer / branding
 ```
@@ -123,8 +137,6 @@ ui/branding.py                      # Footer / branding
 
 ```bash
 python test_groq.py            # sanity-check Groq connection
-python test_player_matching.py # test player name resolution via API-football
-python test_scraping.py        # legacy FBref scraper (not used in main pipeline)
 ```
 
 ---
