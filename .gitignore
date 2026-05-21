@@ -16,7 +16,6 @@ __pycache__/
 .claude/
 
 # --- Private core (not for public repo) ---
-prompts/
 tools/grading.py
 CLAUDE.md
 archive/
