@@ -4,3 +4,22 @@
 
 # --- Python cache / build files ---
 __pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# --- macOS ---
+.DS_Store
+
+# --- Editor / tool config ---
+.vscode/
+.claude/
+
+# --- Private core (not for public repo) ---
+prompts/
+tools/grading.py
+CLAUDE.md
+archive/
+
+# --- Large test data ---
+test_player_matching.py
