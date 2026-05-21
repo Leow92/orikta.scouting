@@ -9,6 +9,7 @@ import os
 from dotenv import load_dotenv
 from requests.exceptions import ReadTimeout
 from prompts.lang import lang_constraint as _lang_block
+import utils.pipeline_log as pipeline_log
 
 load_dotenv()
 
@@ -20,12 +21,15 @@ LLM_PROVIDER = "mistral"  # "groq" | "mistral"
 GROQ_NARRATIVE_MODEL = os.getenv("GROQ_NARRATIVE_MODEL", "openai/gpt-oss-120b")
 GROQ_ROUTER_MODEL    = os.getenv("GROQ_ROUTER_MODEL",    "llama-3.3-70b-versatile")
 
-MISTRAL_NARRATIVE_MODEL = os.getenv("MISTRAL_NARRATIVE_MODEL", "mistral-medium-3-5")
+MISTRAL_NARRATIVE_MODEL = os.getenv("MISTRAL_NARRATIVE_MODEL", "mistral-small-2506") # mistral-medium-2508
 MISTRAL_ROUTER_MODEL    = os.getenv("MISTRAL_ROUTER_MODEL",    "ministral-14b-2512")
 
-# Resolved router model (used for logging)
+# Resolved models (used for logging)
 ACTIVE_ROUTER_MODEL = (
     MISTRAL_ROUTER_MODEL if LLM_PROVIDER == "mistral" else GROQ_ROUTER_MODEL
+)
+ACTIVE_NARRATIVE_MODEL = (
+    MISTRAL_NARRATIVE_MODEL if LLM_PROVIDER == "mistral" else GROQ_NARRATIVE_MODEL
 )
 
 # ------------------------------------------------------------------ #
@@ -148,9 +152,11 @@ def _route_mistral(messages: list, max_tokens: int = 256) -> str:
 # ------------------------------------------------------------------ #
 def llm_chat(user_content: str, language: str, model: str | None = None) -> str:
     """Narrative LLM call. Dispatches to the active provider (LLM_PROVIDER)."""
+    resolved = model or ACTIVE_NARRATIVE_MODEL
+    pipeline_log.log(f"[narrative] Calling LLM narrative ({LLM_PROVIDER}/{resolved})…")
     if LLM_PROVIDER == "mistral":
-        return _chat_mistral(user_content, language, model or MISTRAL_NARRATIVE_MODEL)
-    return _chat_groq(user_content, language, model or GROQ_NARRATIVE_MODEL)
+        return _chat_mistral(user_content, language, resolved)
+    return _chat_groq(user_content, language, resolved)
 
 
 def llm_route(messages: list, max_tokens: int = 256) -> str:
