@@ -63,7 +63,7 @@ st.session_state.setdefault("tb_results", [])
 st.session_state.setdefault("tb_built", False)
 
 # ── Header ───────────────────────────────────────────────────────────
-st.markdown("# 🏗️ " + _t("Team Builder", "Constructeur d'Équipe"))
+st.markdown(f"# {_t('Team Builder', 'Constructeur d\'Équipe')}")
 st.caption(_t(
     "Choose a formation, assign players to each position, then build your team rating.",
     "Choisissez une formation, assignez des joueurs à chaque poste, puis évaluez votre équipe.",
@@ -168,14 +168,16 @@ if st.session_state.tb_built and st.session_state.tb_results:
 
         if overall is not None:
             grade_color = (
-                "#00C853" if overall >= 75 else
-                "#F39C12" if overall >= 60 else
+                "#00C853" if overall >= 70 else
+                "#27AE60" if overall >= 60 else
+                "#F39C12" if overall >= 50 else
+                "#E67E22" if overall >= 40 else
                 "#E74C3C"
             )
             st.markdown(
                 f'<div style="font-size:3.2rem;font-weight:900;color:{grade_color};'
                 f'line-height:1.1">{overall:.0f}'
-                f'<span style="font-size:1.1rem;color:#aaa;font-weight:400"> /100</span></div>'
+                f'<span style="font-size:1.1rem;color:#aaa;font-weight:400"> /80</span></div>'
                 f'<div style="color:#aaa;font-size:0.85rem;margin-bottom:16px">'
                 f'{_t("Overall Team Rating", "Note Globale de l\'Équipe")}</div>',
                 unsafe_allow_html=True,
@@ -192,13 +194,20 @@ if st.session_state.tb_built and st.session_state.tb_results:
             z = zone_scores.get(zone)
             if z is None:
                 continue
-            bar_color = "#00C853" if z >= 75 else "#F39C12" if z >= 60 else "#E74C3C"
+            bar_color = (
+                "#00C853" if z >= 70 else
+                "#27AE60" if z >= 60 else
+                "#F39C12" if z >= 50 else
+                "#E67E22" if z >= 40 else
+                "#E74C3C"
+            )
+            bar_pct = min(int(z / 80 * 100), 100)
             st.markdown(
                 f'<div style="display:flex;justify-content:space-between;margin-bottom:2px">'
                 f'<span><b>{zone_display[zone]}</b></span>'
                 f'<span style="color:{bar_color};font-weight:700">{z:.0f}</span></div>'
                 f'<div style="background:rgba(255,255,255,0.12);border-radius:4px;height:7px;margin-bottom:12px">'
-                f'<div style="background:{bar_color};width:{int(z)}%;height:7px;border-radius:4px"></div>'
+                f'<div style="background:{bar_color};width:{bar_pct}%;height:7px;border-radius:4px"></div>'
                 f'</div>',
                 unsafe_allow_html=True,
             )
@@ -213,7 +222,13 @@ if st.session_state.tb_built and st.session_state.tb_results:
                 grade_display = "⚠️"
             elif r.grade is not None:
                 g = r.grade
-                color = "#00C853" if g >= 75 else "#F39C12" if g >= 60 else "#E74C3C"
+                color = (
+                    "#00C853" if g >= 70 else
+                    "#27AE60" if g >= 60 else
+                    "#F39C12" if g >= 50 else
+                    "#E67E22" if g >= 40 else
+                    "#E74C3C"
+                )
                 grade_display = f'<span style="color:{color};font-weight:700">{g:.0f}</span>'
             else:
                 grade_display = "—"
@@ -246,11 +261,11 @@ if st.session_state.tb_built and st.session_state.tb_results:
         st.markdown(
             '<div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;'
             'font-size:0.78rem;margin-top:-8px">'
-            '<span>🟩 ≥82</span>'
-            '<span>🟢 70–81</span>'
-            '<span>🟡 60–69</span>'
-            '<span>🟠 48–59</span>'
-            '<span>🔴 &lt;48</span>'
+            '<span>🟩 ≥70</span>'
+            '<span>🟢 60–69</span>'
+            '<span>🟡 50–59</span>'
+            '<span>🟠 40–49</span>'
+            '<span>🔴 &lt;40</span>'
             '<span style="color:#607D8B">⬛ n/a</span>'
             '</div>',
             unsafe_allow_html=True,

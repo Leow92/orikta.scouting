@@ -9,13 +9,13 @@ import plotly.graph_objects as go
 def _grade_color(grade: float | None) -> str:
     if grade is None:
         return "#607D8B"   # slate-grey — not yet fetched
-    if grade >= 82:
-        return "#00C853"   # bright green
     if grade >= 70:
-        return "#27AE60"   # green
+        return "#00C853"   # bright green
     if grade >= 60:
+        return "#27AE60"   # green
+    if grade >= 50:
         return "#F39C12"   # amber
-    if grade >= 48:
+    if grade >= 40:
         return "#E67E22"   # orange
     return "#E74C3C"       # red
 
@@ -83,6 +83,16 @@ def _pitch_shapes() -> list[dict]:
              x0=0.5 - 0.005, y0=H - 0.115 - 0.004,
              x1=0.5 + 0.005, y1=H - 0.115 + 0.004,
              line=dict(color="white", width=1), fillcolor="white"),
+        # Bottom goal (GK end) — sticks out below the pitch line
+        dict(type="rect",
+             x0=0.5 - 0.054, y0=-0.028, x1=0.5 + 0.054, y1=0,
+             line=dict(color="rgba(255,255,255,0.9)", width=2),
+             fillcolor="rgba(255,255,255,0.08)"),
+        # Top goal (attacking end) — sticks out above the pitch line
+        dict(type="rect",
+             x0=0.5 - 0.054, y0=H, x1=0.5 + 0.054, y1=H + 0.028,
+             line=dict(color="rgba(255,255,255,0.9)", width=2),
+             fillcolor="rgba(255,255,255,0.08)"),
     ]
     return shapes
 
@@ -122,7 +132,7 @@ def create_pitch_figure(
 
         hover_line = (
             f"<b>{slot.label}</b> — {name or '(empty)'}<br>"
-            f"Grade: <b>{grade_str}/100</b><br>"
+            f"Grade: <b>{grade_str}/80</b><br>"
             f"Role: {slot.role}"
         )
         if error:

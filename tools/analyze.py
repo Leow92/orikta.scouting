@@ -21,6 +21,7 @@ from tools.grading import (
     label_from_pair,
     PLAY_STYLE_PRESETS,
     PLAY_STYLE_PRETTY,
+    SUBROLES_BY_BASE,
 )
 from utils.lang import _is_fr
 from ui.graph import create_spider_graph
@@ -248,9 +249,14 @@ def _build_style_matrix(
     positions: list[tuple[str, str | None]],
     styles: list[str],
     style_strength: float = 0.6,
+    minutes: int = 0,
+    league: str = "",
+    age: int | None = None,
 ):
     matrix = compute_grade_for_positions_and_styles(
-        scout_df, positions=positions, styles=styles, style_strength=style_strength
+        scout_df, positions=positions, styles=styles, 
+        style_strength=style_strength, minutes=minutes, 
+        league=league, age=age
     )
     role_keys, role_pretty, seen = [], [], set()
     for base, sub in positions:
@@ -447,23 +453,107 @@ def analyze_player(
             role_base, role_sub = "mf", None
         role_hint = f"{role_base}:{role_sub}" if role_sub else role_base
 
+        # ---- 5.5. Extract player context (minutes, age) ----
+        # Get minutes from the best stats entry
+        player_minutes = 0
+        if entry:
+            games = entry.get("games") or {}
+            player_minutes = games.get("minutes") or 0
+        
+        # Get age from player info
+        player_age = None
+        if player_info:
+            try:
+                player_age = int(player_info.get("age"))
+            except (ValueError, TypeError):
+                pass
+
+        # ---- 5.7. Generate candidate positions for comparison ----
+        # Always include detected position, plus all subroles for the base role
+        # and potentially related roles based on stats
+        candidate_positions = list(positions)  # Start with detected positions
+        
+        # Add all subroles for the detected base role
+        if role_base in SUBROLES_BY_BASE:
+            for subrole in SUBROLES_BY_BASE[role_base]:
+                candidate_positions.append((role_base, subrole))
+        
+        # If detected as forward, also try winger and striker
+        if role_base == "fw":
+            for sub in ["st", "w"]:
+                if (role_base, sub) not in candidate_positions:
+                    candidate_positions.append((role_base, sub))
+        
+        # If detected as midfielder, try all subroles
+        if role_base == "mf":
+            for sub in ["dm", "cm", "am", "wm"]:
+                if (role_base, sub) not in candidate_positions:
+                    candidate_positions.append((role_base, sub))
+        
+        # If detected as defender, try all subroles
+        if role_base == "df":
+            for sub in ["cb", "fb"]:
+                if (role_base, sub) not in candidate_positions:
+                    candidate_positions.append((role_base, sub))
+        
+        # If detected as goalkeeper, that's it
+        if role_base == "gk":
+            pass
+        
+        # Add related positions based on common misclassifications
+        # Midfielders are often actually Wingers or Attacking Mids
+        # Forwards are sometimes classified as Midfielders
+        if role_base == "mf":
+            # Add forward positions (common misclassification for wingers)
+            for fw_sub in ["st", "w"]:
+                if ("fw", fw_sub) not in candidate_positions:
+                    candidate_positions.append(("fw", fw_sub))
+        
+        if role_base == "fw":
+            # Add attacking midfielder (common for false 9s, etc.)
+            if ("mf", "am") not in candidate_positions:
+                candidate_positions.append(("mf", "am"))
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        candidate_positions = [
+            p for p in candidate_positions 
+            if p not in seen and not seen.add(p)
+        ]
+
         # ---- 6. Compute deterministic grade ----
         pipeline_log.log(f"[analyze] Positions detected: {positions}")
-        grade_bd = compute_grade(scout_df, role_hint=role_hint)
+        pipeline_log.log(f"[analyze] Candidate positions for comparison: {candidate_positions}")
+        pipeline_log.log(f"[analyze] Context: {player_minutes} mins, age={player_age}, league={league_name}")
+        grade_bd = compute_grade(
+            scout_df, 
+            role_hint=role_hint,
+            minutes=player_minutes,
+            league=league_name,
+            age=player_age
+        )
         if not positions:
             if ":" in grade_bd.role:
                 b, s = grade_bd.role.split(":", 1)
                 positions = [(b, s)]
             else:
                 positions = [(grade_bd.role, None)]
+        
+        # Use candidate positions for multi-position comparison
+        positions = candidate_positions
 
         # ---- 7. Multi-position grades ----
         pipeline_log.log(f"[analyze] Grade computed → role: {grade_bd.role}, score: {grade_bd.final_score:.1f}/100", level="success")
-        per_pos = compute_grade_for_positions(scout_df, positions)
+        per_pos = compute_grade_for_positions(
+            scout_df, positions,
+            minutes=player_minutes,
+            league=league_name,
+            age=player_age
+        )
         per_pos_sorted = dict(sorted(per_pos.items(), key=lambda kv: kv[1].final_score, reverse=True))
 
-        multi_title = _t("### 🧮 Multi-position Grades /100", "### 🧮 Notes par poste /100", language)
-        rows = ["| Position | Score/100 | Top drivers | Missing |", "|---|---:|---|---|"]
+        multi_title = _t("### 🧮 Multi-position Grades /80", "### 🧮 Notes par poste /80", language)
+        rows = ["| Position | Score/80 | Top drivers | Missing |", "|---|---:|---|---|"]
         for role_key, bd in per_pos_sorted.items():
             top2 = sorted(bd.matched, key=lambda x: x[2], reverse=True)[:2]
             top_str = ", ".join(f"{m} (w={w:.2f})" for m, w, _ in top2) if top2 else "—"
@@ -480,7 +570,11 @@ def analyze_player(
         pipeline_log.log(f"[analyze] Multi-position grades computed ({len(per_pos)} roles)")
         styles = styles or list(PLAY_STYLE_PRESETS.keys())
         style_df, *_ = _build_style_matrix(
-            scout_df, positions, styles, style_strength=float(style_strength)
+            scout_df, positions, styles, 
+            style_strength=float(style_strength),
+            minutes=player_minutes,
+            league=league_name,
+            age=player_age
         )
         style_title = _t(
             "### 🎛️ Style Fit Matrix — Roles × Team Play Styles",
@@ -517,8 +611,8 @@ def analyze_player(
             lines.append(f"| {r_label_print} | " + " | ".join(cells) + " |")
 
         style_note = _t(
-            "_Bold = best style per role and best role per style. Scores /100._",
-            "_Gras = meilleur style par poste et meilleur poste par style. Scores /100._",
+            "_Bold = best style per role and best role per style. Scores /80._",
+            "_Gras = meilleur style par poste et meilleur poste par style. Scores /80._",
             language,
         )
         style_md = style_title + "\n" + "\n".join(lines) + "\n\n" + style_note + "\n"

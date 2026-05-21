@@ -218,12 +218,25 @@ def build_scout_df(
 
 
 def get_position_str(player_obj: dict) -> str:
-    """Return position string from statistics entry (more reliable than player.position)."""
+    """Return position string from statistics entry (more reliable than player.position).
+    
+    Tries multiple sources:
+    1. Statistics entry position (competition-specific)
+    2. Player's primary position
+    3. Default to "Midfielder"
+    """
     entry = best_stats_entry(player_obj)
     if entry:
         pos = (entry.get("games") or {}).get("position")
         if pos:
             return pos
+    
+    # Fallback to player's primary position
+    player = player_obj.get("player") or {}
+    pos = player.get("position")
+    if pos:
+        return pos
+    
     return "Midfielder"
 
 
