@@ -8,6 +8,9 @@ __pycache__/
 *.pyo
 .pytest_cache/
 
+# --- HTTP cache (requests-cache SQLite store) ---
+.cache/
+
 # --- macOS ---
 .DS_Store
 

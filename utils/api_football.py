@@ -7,6 +7,7 @@ from __future__ import annotations
 import os
 import time
 from datetime import date
+from pathlib import Path
 import requests
 import streamlit as st
 from dotenv import load_dotenv
@@ -15,6 +16,23 @@ load_dotenv()
 
 _API_KEY = os.getenv("API_FOOTBALL_KEY")
 _BASE = "https://v3.football.api-sports.io"
+
+# Persistent HTTP cache — survives Streamlit session restarts and cuts daily
+# API quota usage dramatically.  Falls back to a plain Session if the cache
+# directory can't be created (e.g. read-only filesystem in some cloud envs).
+try:
+    import requests_cache as _rc
+    _CACHE_DIR = Path(__file__).parent.parent / ".cache"
+    _CACHE_DIR.mkdir(exist_ok=True)
+    _session: requests.Session = _rc.CachedSession(
+        cache_name=str(_CACHE_DIR / "api_football"),
+        backend="sqlite",
+        expire_after=24 * 3600,
+        allowable_codes=[200],
+        stale_if_error=True,
+    )
+except Exception:
+    _session = requests.Session()
 
 # European and national cup competition IDs.
 EUROPEAN_CUP_IDS: set[int] = {
@@ -141,7 +159,7 @@ def _get(endpoint: str, params: dict, timeout: int = 20) -> dict:
     uses exponential backoff starting at _RATE_LIMIT_BASE_DELAY seconds.
     """
     for attempt in range(_RATE_LIMIT_RETRIES + 1):
-        resp = requests.get(
+        resp = _session.get(
             f"{_BASE}/{endpoint}",
             headers=_headers(),
             params=params,
