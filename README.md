@@ -2,6 +2,12 @@
 
 Ask a real scouting question. Get a data-backed answer.
 
+[![Live app](https://img.shields.io/badge/Try%20it%20live-Streamlit-FF4B4B?logo=streamlit)](https://oriktascouting.streamlit.app/)
+
+![Demo](assets/demo-bellingham.png)
+
+---
+
 orikta.scouting is a football scouting app built with Streamlit. 
 
 You type a question in plain English or French — *"Is Mbappe better as a 9 or a left winger?"* — and the app fetches live player statistics from **API-football**, runs deterministic grading and percentile ranking against the full league pool, then feeds your exact question plus all that data to an LLM (**Mistral** or **Groq**). The scout report opens by directly answering what you asked, then backs it up with metric-level evidence.
