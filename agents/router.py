@@ -110,14 +110,14 @@ def route_query(user_query: str, skip_llm: bool = False) -> tuple[str, str]:
             pipeline_log.log("[router] No player name detected — cannot dispatch", level="warning")
             return _no_player_msg(language), language
         pipeline_log.log(f"[router] Dispatching to analyze → {players[:1]}")
-        return analyze_player(players[:1], language=language, skip_llm=skip_llm), language
+        return analyze_player(players[:1], language=language, skip_llm=skip_llm, user_query=user_query), language
 
     if tool == "compare":
         if len(players) < 2:
             pipeline_log.log("[router] Fewer than 2 players detected — cannot compare", level="warning")
             return _no_player_msg(language), language
         pipeline_log.log(f"[router] Dispatching to compare → {players[:2]}")
-        return compare_players(players[:2], language=language, skip_llm=skip_llm), language
+        return compare_players(players[:2], language=language, skip_llm=skip_llm, user_query=user_query), language
 
     if tool == "blocked":
         pipeline_log.log("[router] Guardrail triggered — query blocked", level="warning")

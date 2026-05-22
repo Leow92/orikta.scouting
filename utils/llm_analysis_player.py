@@ -72,6 +72,7 @@ def analyze_single_player_workflow(
     multi_style_md: str | None = None,
     trend_block_md: str | None = None,
     presentation_md: str | None = None,
+    user_query: str = "",
 ) -> str:
     try:
         if "Percentile" in scout_df.columns:
@@ -123,11 +124,12 @@ def analyze_single_player_workflow(
 
         # ---- Prompt 2: synthesis paragraphs ----
         p_summary = render(
-            "player_summary_v0.2.j2",
+            "player_summary_v0.3.j2",
             scout_pct_only_md=scout_pct_only_md,
             multi_style_md=multi_style_md or "",
             trend_block_md=trend_block_md or "",
             presentation_md=presentation_md or "",
+            user_query=user_query,
             language=language,
         )
         summary_md = _call(p_summary) or fallback

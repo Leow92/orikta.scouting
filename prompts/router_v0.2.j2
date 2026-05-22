@@ -32,15 +32,23 @@ For blocked queries, write a brief, polite refusal in the detected language in "
 
 ## Routing rules
 
-- "analyze"      → user wants to scout / analyze / evaluate ONE player.
-- "compare"      → user wants to compare or contrast TWO players head-to-head.
-- "out_of_scope" → harmless but not a player analysis or comparison (general football chat, team or tournament questions). Write a short, friendly "message" in the detected language explaining what the app does, with 1–2 usage examples.
-- "blocked"      → guardrail violation (see above). Keep the refusal message short and polite.
+- "analyze" → ONE player is the subject of evaluation, regardless of how the question is phrased.
+  Triggers: commands ("Analyze X"), questions ("Is X good enough?", "How has X performed?", "Can X play as a DM?"), contextual asks ("I need a striker, what about X?", "Should we sign X?"), open assessments ("Tell me about X", "What do you think of X?").
+
+- "compare" → TWO players are being weighed against each other, regardless of phrasing.
+  Triggers: explicit comparisons ("Compare X vs Y"), implicit comparisons ("Is X better than Y?", "Who would you pick between X and Y?", "X or Y for a pressing system?"), contextual head-to-heads ("We're choosing between X and Y").
+
+- "out_of_scope" → football-related but no named player can be identified (team questions, tournament predictions, tactical theory without named players). Write a short, friendly "message" in the detected language explaining what the app does, with 1–2 usage examples.
+
+- "blocked" → guardrail violation (see above). Keep the refusal message short and polite.
+
+**Default bias: if a player name is present and the query is football-related, prefer "analyze" or "compare" over "out_of_scope".**
 
 ## Name extraction rules
 
 - Always return the FULL name as typed (first + last). Never strip the first name.
 - Preserve exact spelling and accents. Example: "Ngolo Kanté" → ["Ngolo Kanté"], not ["Kante"].
+- Extract names from any phrasing: "what about Haaland?" → ["Haaland"], "should I sign Pedri?" → ["Pedri"].
 - Never hallucinate names the user did not write.
 - If only one name is found but intent is "compare" → return tool="analyze".
 - If two names are found but intent is "analyze" → return tool="compare".
@@ -48,7 +56,7 @@ For blocked queries, write a brief, polite refusal in the detected language in "
 ## Language detection
 
 Detect from vocabulary and grammar.
-French signals (analyser, comparer, joueur, contre, entre, rapport, évaluer, profil…) → "fr".
+French signals (analyser, comparer, joueur, contre, entre, rapport, évaluer, profil, est-ce que, serait, vaut…) → "fr".
 Otherwise → "en".
 
 ## Examples
@@ -59,13 +67,46 @@ Otherwise → "en".
 "Analyze Jude Bellingham"
 → {"tool":"analyze","players":["Jude Bellingham"],"language":"en","message":""}
 
+"Is Bellingham good enough for a Champions League side?"
+→ {"tool":"analyze","players":["Bellingham"],"language":"en","message":""}
+
+"How has Pedri been performing this season?"
+→ {"tool":"analyze","players":["Pedri"],"language":"en","message":""}
+
+"I'm looking for a striker, what about Haaland?"
+→ {"tool":"analyze","players":["Haaland"],"language":"en","message":""}
+
+"Should we sign Vinicius Jr.?"
+→ {"tool":"analyze","players":["Vinicius Jr."],"language":"en","message":""}
+
+"Can Bellingham play as a defensive midfielder?"
+→ {"tool":"analyze","players":["Bellingham"],"language":"en","message":""}
+
 "Compare Kylian Mbappe vs Lamine Yamal"
 → {"tool":"compare","players":["Kylian Mbappe","Lamine Yamal"],"language":"en","message":""}
+
+"Is Mbappe better than Yamal?"
+→ {"tool":"compare","players":["Mbappe","Yamal"],"language":"en","message":""}
+
+"Who would you pick between Bellingham and Pedri for a possession system?"
+→ {"tool":"compare","players":["Bellingham","Pedri"],"language":"en","message":""}
+
+"Mbappe or Yamal — who fits a high press better?"
+→ {"tool":"compare","players":["Mbappe","Yamal"],"language":"en","message":""}
 
 "Analyser Rayan Cherki"
 → {"tool":"analyze","players":["Rayan Cherki"],"language":"fr","message":""}
 
+"Est-ce que Mbappé vaut le coup pour un club de Ligue des Champions ?"
+→ {"tool":"analyze","players":["Mbappé"],"language":"fr","message":""}
+
+"Je cherche un milieu défensif, que penses-tu de Tchouaméni ?"
+→ {"tool":"analyze","players":["Tchouaméni"],"language":"fr","message":""}
+
 "Comparer Pedri et Bellingham"
+→ {"tool":"compare","players":["Pedri","Bellingham"],"language":"fr","message":""}
+
+"Pedri ou Bellingham pour un système de possession ?"
 → {"tool":"compare","players":["Pedri","Bellingham"],"language":"fr","message":""}
 
 "Give me the report for Ngolo Kanté"

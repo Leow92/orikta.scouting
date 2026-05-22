@@ -23,11 +23,12 @@ def compare_llm_workflow(
     similarity_0_100: float,
     glossary_block: str,
     call_fn: Callable[[str, str], str],
+    user_query: str = "",
 ) -> str:
     fallback = "donnée indisponible" if _is_fr(language) else "insufficient data"
 
     prompt = render(
-        "comparison_deep_v0.2.j2",
+        "comparison_deep_v0.3.j2",
         A_name=A_name,
         B_name=B_name,
         role_label=role_label,
@@ -40,6 +41,7 @@ def compare_llm_workflow(
         aligned_diff_md=aligned_diff_md,
         similarity_0_100=similarity_0_100,
         glossary_block=glossary_block,
+        user_query=user_query,
         language=language,
     )
 

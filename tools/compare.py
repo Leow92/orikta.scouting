@@ -298,6 +298,7 @@ def compare_players(
     styles: list[str] | None = None,
     style_influence: float = 0,
     skip_llm: bool = False,
+    user_query: str = "",
 ) -> str:
     """
     Head-to-head report between two players (API-football edition).
@@ -438,11 +439,13 @@ def compare_players(
         style_line = _t("**Best style context**", "**Meilleur style**", language) + f": **{best_style_label}**"
         sim_line   = _t("**Profile similarity**", "**Similarité de profil**", language) + f": {similarity:.1f}/100"
 
-        deterministic_md = f"""
+        header_md = f"""
 {title}
 {SEPARATOR}
 {photos_html}
-{SEPARATOR}
+"""
+
+        data_md = f"""
 {comparison_profile_md}
 {SEPARATOR}
 {role_line}
@@ -468,8 +471,7 @@ def compare_players(
 
         if skip_llm:
             pipeline_log.log("[compare] Fast preview mode — skipping LLM narrative", level="success")
-            deterministic_md += "\n\n> ⚡ **Fast preview:** LLM analysis skipped."
-            return deterministic_md
+            return header_md + SEPARATOR + data_md + "\n\n> ⚡ **Fast preview:** LLM analysis skipped."
 
         pipeline_log.log("[compare] Calling LLM for comparison narrative…")
         compare_llm_md = compare_llm_workflow(
@@ -484,10 +486,11 @@ def compare_players(
             similarity_0_100=similarity,
             glossary_block=glossary_block,
             call_fn=_call_twice,
+            user_query=user_query,
         )
 
         pipeline_log.log("[compare] Report generation complete", level="success")
-        return deterministic_md + "\n\n---\n\n" + compare_llm_md
+        return header_md + SEPARATOR + compare_llm_md + SEPARATOR + data_md
 
     except Exception as e:
         pipeline_log.log(f"[compare] Unhandled error: {e}", level="error")

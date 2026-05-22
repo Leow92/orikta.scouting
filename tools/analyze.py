@@ -350,6 +350,7 @@ def analyze_player(
     styles: list[str] | None = None,
     style_strength: float = 0,
     skip_llm: bool = False,
+    user_query: str = "",
 ) -> str:
     """
     Single-player analysis pipeline (API-football edition):
@@ -703,11 +704,14 @@ def analyze_player(
             grade_ctx=grade_ctx,
             trend_block_md=trend_block_md,
             presentation_md=presentation_md,
+            user_query=user_query,
         )
 
         pipeline_log.log("[analyze] Report generation complete", level="success")
         return _md(f"""
 {player_photo_html}
+{SEPARATOR}
+{llm_text}
 {SEPARATOR}
 {presentation_md}
 {spider_graph_html}
@@ -718,8 +722,6 @@ def analyze_player(
 {multi_md}
 {SEPARATOR}
 {std2_md}
-{SEPARATOR}
-{llm_text}
 """)
 
     except Exception as e:
