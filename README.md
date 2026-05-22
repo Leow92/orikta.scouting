@@ -1,16 +1,27 @@
 # orikta.scouting
 
-A local or cloud-deployed, privacy-first football scouting app built with Streamlit.  
-It fetches player statistics from the **API-football** REST API, computes deterministic performance grades, and generates tactical scouting narratives via a pluggable LLM backend (**Mistral** or **Groq**).
+Ask a real scouting question. Get a data-backed answer.
+
+orikta.scouting is a football scouting app built with Streamlit. You type a question in plain English — *"Is Mbappe better as a 9 or a left winger?"* — and the app fetches live player statistics from **API-football**, runs deterministic grading and percentile ranking against the full league pool, then feeds your exact question plus all that data to an LLM (**Mistral** or **Groq**). The scout report opens by directly answering what you asked, then backs it up with metric-level evidence.
+
+---
+
+## How it works
+
+1. **You ask a question** in natural language — the router classifies intent (analyze / compare) and extracts player names.
+2. **The pipeline fetches data** — per-90 stats, percentile grades against the league pool, season-over-season trends, role fit scores.
+3. **Your question + all the data** is passed to the LLM — the report opens by answering your specific question, then delivers the full scouting synthesis.
+4. **Every claim is data-backed** — inline metric citations (`Progressive Passes — 92p`), a ceiling verdict, and a recruitment action (Sign / Monitor / Reject).
 
 ---
 
 ## Features
 
-- Analyze a single player or compare two players side-by-side.
-- **Team Builder**: select a formation, assign players to slots, and get team-wide grades on a visual pitch diagram.
-- Deterministic scores: role fit, head-to-head, profile similarity, style fit matrix.
-- **Fast preview**: skip LLM for instant, deterministic output.
+- Conversational interface: ask tactical questions, get tailored answers grounded in real data.
+- Single-player scouting or two-player head-to-head comparison.
+- **Team Builder**: pick a formation, slot in players, get role-fit grades on a visual pitch diagram.
+- Deterministic layer: per-90 stats, percentile grades, role fit score, head-to-head deltas, profile similarity, play-style fit.
+- **Fast preview**: skip the LLM call for instant deterministic output.
 - English UI; LLM narrative output supports English & Français.
 - Pluggable LLM backend: Mistral (default) or Groq.
 - Works **locally** or **online** (deployed Streamlit app).
@@ -61,23 +72,35 @@ streamlit run app.py
 
 ### Sidebar options
 
-- **Team play styles** + style influence
+- **Team play styles** + style influence slider
 - **Fast preview (skip LLM)** for deterministic-only mode
 - **Theme** selector (default: World Cup 2026)
 
-### Prompt examples
+### Ask anything about a player or a duel
 
+The app routes your question automatically — no commands, no forms.
+
+**Single player**
 ```
-Analyze Cherki
-Compare Mbappe Mohamedsalah
-Mbappe vs Mohamedsalah
+Is Mbappe better as a number 9 or as a left winger?
+Is Bellingham better as a box-to-box or a deep-lying playmaker?
+Can Pedri adapt to a high-press system?
+Is Yamal ready to lead the line at a Champions League club?
 ```
 
-### Output
+**Head-to-head comparison**
+```
+Who fits a transition play style better — Bellingham or Vinícius Jr.?
+Who would thrive more in a crossing-heavy system — Saka or Salah?
+Should we sign Haaland or Mbappé for a possession-based side?
+Compare Pedri vs Bellingham for a 4-3-3 pressing system
+```
 
-- Deterministic data tables with per-90 stats and percentile grades
-- Spider / radar charts (single or dual overlay)
-- Optional LLM-generated narrative scouting report
+### What you get
+
+- Per-90 stats table and percentile grades vs. the full league pool
+- Spider / radar chart (single or dual overlay)
+- LLM scouting report — opens by answering your question directly, backs every claim with `Metric — XXp` citations, closes with a ceiling verdict and recruitment action
 - Download as **Markdown** or **HTML**
 
 ---
@@ -94,11 +117,11 @@ Navigate to the **Team Builder** page (sidebar) to:
 
 ## Deterministic vs LLM
 
-| Mode | Description |
+| Layer | What it does |
 |---|---|
-| **Deterministic** | Per-90 stats, percentile grades, role fit score, head-to-head, spider chart |
-| **LLM narrative** | Tactical interpretation, scouting story, comparison verdict |
-| **Fast preview** | Skips the LLM call for instant local results |
+| **Deterministic** | Per-90 stats, percentile grades, role fit score, head-to-head deltas, spider chart — no LLM, fully reproducible |
+| **LLM narrative** | Answers your question, then delivers a metric-backed tactical report with ceiling verdict and recruitment action |
+| **Fast preview** | Skips the LLM call entirely — instant deterministic results |
 
 ---
 
@@ -120,7 +143,7 @@ utils/llm_analysis_comparison.py    # Comparison LLM workflow
 utils/lang.py                       # Bilingual helpers (_t, _is_fr)
 utils/pipeline_log.py               # Prompt/response size logging
 prompts/router.j2                   # Router system prompt (Jinja2)
-prompts/player_summary.j2           # Single-player narrative template
+prompts/player_summary_v0.3.j2      # Single-player narrative template (active)
 prompts/comparison_deep.j2          # Comparison narrative template
 prompts/lang.py                     # lang_constraint(), glossary_block(), role_guide()
 prompts/render.py                   # Jinja2 renderer (auto-injects is_fr)
