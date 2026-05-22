@@ -21,6 +21,9 @@ st.set_page_config(
 
 st.markdown("""
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<style>
+small.st-emotion-cache-1gulkj5, [data-testid="InputInstructions"] { display: none !important; }
+</style>
 """, unsafe_allow_html=True)
 st.markdown(get_theme_css(), unsafe_allow_html=True)
 
