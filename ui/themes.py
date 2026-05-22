@@ -22,6 +22,11 @@ hr { border: none; border-top: 1px solid var(--orikta-border, #e5e7eb); margin: 
 .stMarkdown table { width: 100%; border-collapse: collapse; }
 .stMarkdown th, .stMarkdown td { padding: 6px; border: 1px solid var(--orikta-border, #e5e7eb); }
 .stMarkdown th { background: var(--orikta-th-bg, #f8fafc); color: var(--orikta-th-text, #111); font-weight: 600; }
+/* Placeholder visible on both light and dark input backgrounds */
+[data-testid="stTextInput"] input::placeholder {
+    color: var(--orikta-placeholder, rgba(100, 116, 139, 0.75)) !important;
+    opacity: 1 !important;
+}
 
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
@@ -210,6 +215,11 @@ label { color: #93c5fd !important; }
 [data-testid="stTextInput"] input:focus {
     border-color: #FFD700 !important;
     box-shadow: 0 0 0 2px rgba(255,215,0,0.25) !important;
+}
+.stTextInput input::placeholder,
+[data-testid="stTextInput"] input::placeholder {
+    color: rgba(147, 197, 253, 0.55) !important;
+    opacity: 1 !important;
 }
 /* Tables */
 .stMarkdown th {

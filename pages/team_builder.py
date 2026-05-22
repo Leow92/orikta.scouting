@@ -22,28 +22,7 @@ st.markdown("""
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 """, unsafe_allow_html=True)
 
-st.session_state.setdefault("language", "English")
-
 st.markdown(get_theme_css(), unsafe_allow_html=True)
-
-with st.sidebar:
-    st.markdown("### 🌐 Language")
-    current_lang = st.session_state.get("language", "English")
-    selection = st.radio(
-        "Language",
-        options=["English", "Français"],
-        index=1 if str(current_lang).lower().startswith("fr") else 0,
-        horizontal=True,
-        key="lang_selector",
-        label_visibility="collapsed",
-    )
-    st.session_state.language = "Français" if selection.startswith("Fr") else "English"
-
-# ── Language helper ──────────────────────────────────────────────────
-_lang = "fr" if str(st.session_state.get("language", "English")).lower().startswith("fr") else "en"
-
-def _t(en: str, fr: str) -> str:
-    return fr if _lang == "fr" else en
 
 # ── Session state init ───────────────────────────────────────────────
 st.session_state.setdefault("tb_formation", "4-3-3")
@@ -52,19 +31,16 @@ st.session_state.setdefault("tb_results", [])
 st.session_state.setdefault("tb_built", False)
 
 # ── Header ───────────────────────────────────────────────────────────
-st.markdown(f"# {_t('Team Builder', 'Constructeur d\'Équipe')}")
-st.caption(_t(
-    "Choose a formation, assign players to each position, then build your team rating.",
-    "Choisissez une formation, assignez des joueurs à chaque poste, puis évaluez votre équipe.",
-))
+st.markdown("# Team Builder")
+st.caption("Choose a formation, assign players to each position, then build your team rating.")
 
 # ── Top controls: team name + formation ─────────────────────────────
 col_name, col_form = st.columns([2, 1])
 with col_name:
     new_team_name = st.text_input(
-        _t("Team name", "Nom de l'équipe"),
+        "Team name",
         value=st.session_state.tb_team_name,
-        placeholder=_t("My dream team…", "Mon équipe de rêve…"),
+        placeholder="My dream team…",
     )
     st.session_state.tb_team_name = new_team_name
 
@@ -72,7 +48,7 @@ with col_form:
     formation_options = list(FORMATIONS.keys())
     prev_formation = st.session_state.tb_formation
     new_formation = st.selectbox(
-        _t("Formation", "Formation"),
+        "Formation",
         options=formation_options,
         index=formation_options.index(st.session_state.tb_formation),
     )
@@ -87,10 +63,10 @@ st.divider()
 slots = FORMATIONS[st.session_state.tb_formation]
 
 ZONE_LABELS = {
-    "gk":       _t("🥅 Goalkeeper",   "🥅 Gardien"),
-    "defense":  _t("🛡️ Defense",       "🛡️ Défense"),
-    "midfield": _t("⚙️ Midfield",      "⚙️ Milieu"),
-    "attack":   _t("⚡ Attack",         "⚡ Attaque"),
+    "gk":       "🥅 Goalkeeper",
+    "defense":  "🛡️ Defense",
+    "midfield": "⚙️ Midfield",
+    "attack":   "⚡ Attack",
 }
 
 for zone in ZONE_ORDER:
@@ -107,33 +83,28 @@ for zone in ZONE_ORDER:
             st.text_input(
                 slot.label,
                 key=key,
-                placeholder=_t("Player name…", "Nom du joueur…"),
+                placeholder="Player name…",
                 label_visibility="visible",
             )
 
 st.divider()
 
 # ── Build button ─────────────────────────────────────────────────────
-if st.button(
-    _t("⚽  Build Team", "⚽  Construire l'Équipe"),
-    type="primary",
-    use_container_width=True,
-):
+if st.button("⚽  Build Team", type="primary", use_container_width=True):
     season = current_season()
     results: list[SlotResult] = []
 
-    progress = st.progress(0.0, text=_t("Fetching players…", "Récupération des joueurs…"))
+    progress = st.progress(0.0, text="Fetching players…")
     for i, slot in enumerate(slots):
         query = st.session_state.get(f"tb_slot_{slot.id}", "").strip()
         progress.progress(
             i / len(slots),
-            text=_t(f"[{i+1}/{len(slots)}] {slot.label}: {query or '(empty)'}",
-                    f"[{i+1}/{len(slots)}] {slot.label}: {query or '(vide)'}"),
+            text=f"[{i+1}/{len(slots)}] {slot.label}: {query or '(empty)'}",
         )
         r = fetch_slot(slot, query, season=season)
         results.append(r)
 
-    progress.progress(1.0, text=_t("Done ✅", "Terminé ✅"))
+    progress.progress(1.0, text="Done ✅")
     progress.empty()
 
     st.session_state.tb_results = results
@@ -152,7 +123,7 @@ if st.session_state.tb_built and st.session_state.tb_results:
 
     # ── Left: scores + player table ──────────────────────────────────
     with col_score:
-        team_label = st.session_state.tb_team_name or _t("Team", "Équipe")
+        team_label = st.session_state.tb_team_name or "Team"
         st.markdown(f"### {team_label}")
 
         if overall is not None:
@@ -168,15 +139,15 @@ if st.session_state.tb_built and st.session_state.tb_results:
                 f'line-height:1.1">{overall:.0f}'
                 f'<span style="font-size:1.1rem;color:#aaa;font-weight:400"> /80</span></div>'
                 f'<div style="color:#aaa;font-size:0.85rem;margin-bottom:16px">'
-                f'{_t("Overall Team Rating", "Note Globale de l\'Équipe")}</div>',
+                f'Overall Team Rating</div>',
                 unsafe_allow_html=True,
             )
 
         zone_display = {
-            "gk":       _t("🥅 GK",        "🥅 GB"),
-            "defense":  _t("🛡️ Defense",   "🛡️ Défense"),
-            "midfield": _t("⚙️ Midfield",  "⚙️ Milieu"),
-            "attack":   _t("⚡ Attack",     "⚡ Attaque"),
+            "gk":       "🥅 GK",
+            "defense":  "🛡️ Defense",
+            "midfield": "⚙️ Midfield",
+            "attack":   "⚡ Attack",
         }
 
         for zone in ZONE_ORDER:
@@ -202,7 +173,7 @@ if st.session_state.tb_built and st.session_state.tb_results:
             )
 
         st.markdown("---")
-        st.markdown("##### " + _t("Player Grades", "Notes des Joueurs"))
+        st.markdown("##### Player Grades")
 
         table_rows = ["| Pos | Player | Grade |", "|---|---|---:|"]
         for r in results:
@@ -225,11 +196,10 @@ if st.session_state.tb_built and st.session_state.tb_results:
 
         st.markdown("\n".join(table_rows), unsafe_allow_html=True)
 
-        # Warnings for unfound players
         errors = [(r.slot.label, r.query, r.error) for r in results if r.error]
         if errors:
             st.markdown("---")
-            st.markdown("**⚠️ " + _t("Issues", "Problèmes") + "**")
+            st.markdown("**⚠️ Issues**")
             for label, query, err in errors:
                 st.caption(f"{label} ({query}): {err}")
 
@@ -246,7 +216,6 @@ if st.session_state.tb_built and st.session_state.tb_results:
         )
         st.plotly_chart(fig, use_container_width=True)
 
-        # Grade legend
         st.markdown(
             '<div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;'
             'font-size:0.78rem;margin-top:-8px">'

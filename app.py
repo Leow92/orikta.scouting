@@ -60,6 +60,72 @@ with st.form(key="query_form", clear_on_submit=False):
     )
     submitted = st.form_submit_button("Generate", type="primary", use_container_width=True)
 
+# -------- Typewriter placeholder animation --------
+# st.markdown does not execute <script> tags (inserted via innerHTML).
+# st.components.v1.html() runs in a real iframe; window.parent gives us the
+# Streamlit page DOM where the actual text input lives.
+st.components.v1.html("""
+<script>
+(function() {
+    var par = window.parent;
+    if (par._oriktaTyper) return;
+    par._oriktaTyper = true;
+
+    var Q = [
+        "Is Mbappe better as a number 9 or as a left winger?",
+        "Who fits a transition play style better — Bellingham or Vinícius Jr.?",
+        "Is Bellingham better as a box-to-box or a deep-lying playmaker?",
+        "Who would thrive more in a crossing-heavy system — Saka or Salah?",
+        "Can Pedri adapt to a high-press system?",
+        "Should we sign Haaland or Mbappé for a possession-based side?",
+        "Is Yamal ready to lead the line at a Champions League club?",
+        "Who fits a low-block counter-attack better — Osimhen or Lukaku?",
+        "Is Tchouaméni better suited as a pivot or a box-to-box midfielder?",
+        "Compare Pedri vs Bellingham for a 4-3-3 pressing system",
+        "Which striker profiles best for a false 9 role?",
+        "Is Vinicius Jr. better suited for counter-attack or possession play?",
+    ];
+
+    var qi = 0, ci = 0, del = false, inp = null;
+
+    function find() {
+        return par.document.querySelector('[data-testid="stTextInput"] input');
+    }
+
+    function tick() {
+        if (!inp || !inp.isConnected) inp = find();
+        if (!inp) { setTimeout(tick, 400); return; }
+
+        if (par.document.activeElement === inp || inp.value) {
+            setTimeout(tick, 400);
+            return;
+        }
+
+        var q = Q[qi];
+        if (!del) {
+            if (ci < q.length) {
+                inp.placeholder = q.slice(0, ++ci);
+                setTimeout(tick, 52 + Math.random() * 36);
+            } else {
+                setTimeout(function() { del = true; tick(); }, 2200);
+            }
+        } else {
+            if (ci > 0) {
+                inp.placeholder = q.slice(0, --ci);
+                setTimeout(tick, 26 + Math.random() * 18);
+            } else {
+                del = false;
+                qi = (qi + 1) % Q.length;
+                setTimeout(tick, 450);
+            }
+        }
+    }
+
+    setTimeout(tick, 900);
+})();
+</script>
+""", height=0)
+
 # -------- Run pipeline on submit --------
 _generation_run = False
 
