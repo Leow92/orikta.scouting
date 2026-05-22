@@ -544,7 +544,7 @@ def analyze_player(
         positions = candidate_positions
 
         # ---- 7. Multi-position grades ----
-        pipeline_log.log(f"[analyze] Grade computed → role: {grade_bd.role}, score: {grade_bd.final_score:.1f}/100", level="success")
+        pipeline_log.log(f"[analyze] Grade computed → role: {grade_bd.role}, score: {grade_bd.final_score:.1f}/80", level="success")
         per_pos = compute_grade_for_positions(
             scout_df, positions,
             minutes=player_minutes,
