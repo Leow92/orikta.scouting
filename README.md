@@ -157,16 +157,6 @@ ui/branding.py                      # Footer / branding
 
 ---
 
-## Manual Tests
-
-```bash
-python test_groq.py            # sanity-check Groq connection
-python test_player_matching.py # test player name resolution
-python test_scraping.py        # legacy FBref scraper (not in main pipeline)
-```
-
----
-
 ## Deployment
 
 The app runs both **locally** and on **Streamlit Cloud**.
