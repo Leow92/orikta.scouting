@@ -1,7 +1,7 @@
 # orikta.scouting
 
 A local or cloud-deployed, privacy-first football scouting app built with Streamlit.  
-It fetches player statistics from the **API-football** REST API, computes deterministic performance grades, and generates tactical scouting narratives via a pluggable LLM backend (**Mistral** or **Groq**) — in English or French.
+It fetches player statistics from the **API-football** REST API, computes deterministic performance grades, and generates tactical scouting narratives via a pluggable LLM backend (**Mistral** or **Groq**).
 
 ---
 
@@ -11,7 +11,7 @@ It fetches player statistics from the **API-football** REST API, computes determ
 - **Team Builder**: select a formation, assign players to slots, and get team-wide grades on a visual pitch diagram.
 - Deterministic scores: role fit, head-to-head, profile similarity, style fit matrix.
 - **Fast preview**: skip LLM for instant, deterministic output.
-- Bilingual UI / LLM output: English & Français.
+- English UI; LLM narrative output supports English & Français.
 - Pluggable LLM backend: Mistral (default) or Groq.
 - Works **locally** or **online** (deployed Streamlit app).
 
@@ -61,7 +61,6 @@ streamlit run app.py
 
 ### Sidebar options
 
-- **Language** (English / Français)
 - **Team play styles** + style influence
 - **Fast preview (skip LLM)** for deterministic-only mode
 - **Theme** selector (default: World Cup 2026)
@@ -137,6 +136,8 @@ ui/branding.py                      # Footer / branding
 
 ```bash
 python test_groq.py            # sanity-check Groq connection
+python test_player_matching.py # test player name resolution
+python test_scraping.py        # legacy FBref scraper (not in main pipeline)
 ```
 
 ---
