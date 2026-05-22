@@ -2,13 +2,15 @@
 
 Ask a real scouting question. Get a data-backed answer.
 
-orikta.scouting is a football scouting app built with Streamlit. You type a question in plain English — *"Is Mbappe better as a 9 or a left winger?"* — and the app fetches live player statistics from **API-football**, runs deterministic grading and percentile ranking against the full league pool, then feeds your exact question plus all that data to an LLM (**Mistral** or **Groq**). The scout report opens by directly answering what you asked, then backs it up with metric-level evidence.
+orikta.scouting is a football scouting app built with Streamlit. 
+
+You type a question in plain English or French — *"Is Mbappe better as a 9 or a left winger?"* — and the app fetches live player statistics from **API-football**, runs deterministic grading and percentile ranking against the full league pool, then feeds your exact question plus all that data to an LLM (**Mistral** or **Groq**). The scout report opens by directly answering what you asked, then backs it up with metric-level evidence.
 
 ---
 
 ## How it works
 
-1. **You ask a question** in natural language — the router classifies intent (analyze / compare) and extracts player names.
+1. **You ask a question** in natural language — the router classifies intent and call the right tool (analyze / compare) and extracts player names.
 2. **The pipeline fetches data** — per-90 stats, percentile grades against the league pool, season-over-season trends, role fit scores.
 3. **Your question + all the data** is passed to the LLM — the report opens by answering your specific question, then delivers the full scouting synthesis.
 4. **Every claim is data-backed** — inline metric citations (`Progressive Passes — 92p`), a ceiling verdict, and a recruitment action (Sign / Monitor / Reject).
@@ -17,7 +19,7 @@ orikta.scouting is a football scouting app built with Streamlit. You type a ques
 
 ## Features
 
-- Conversational interface: ask tactical questions, get tailored answers grounded in real data.
+- **Conversational interface**: ask tactical questions, get tailored answers grounded in real data.
 - Single-player scouting or two-player head-to-head comparison.
 - **Team Builder**: pick a formation, slot in players, get role-fit grades on a visual pitch diagram.
 - Deterministic layer: per-90 stats, percentile grades, role fit score, head-to-head deltas, profile similarity, play-style fit.
@@ -61,7 +63,7 @@ streamlit run app.py
 | `MISTRAL_API_KEY` | When using Mistral (default) | Mistral API key |
 | `GROQ_API_KEY` | When using Groq | Groq API key |
 | `LLM_PROVIDER` | No | `"mistral"` (default) or `"groq"` |
-| `MISTRAL_NARRATIVE_MODEL` | No | Override narrative model (default: `mistral-medium-3-5`) |
+| `MISTRAL_NARRATIVE_MODEL` | No | Override narrative model (default: `mistral-small-2506`) |
 | `MISTRAL_ROUTER_MODEL` | No | Override router model (default: `ministral-14b-2512`) |
 | `GROQ_NARRATIVE_MODEL` | No | Override Groq narrative model |
 | `GROQ_ROUTER_MODEL` | No | Override Groq router model |
@@ -109,7 +111,7 @@ Compare Pedri vs Bellingham for a 4-3-3 pressing system
 
 Navigate to the **Team Builder** page (sidebar) to:
 
-1. Pick a formation (4-3-3, 4-4-2, 4-2-3-1, 3-5-2, …)
+1. Pick a formation (4-3-3, 4-4-2, more soon...)
 2. Enter a player name for each slot — the app fetches their stats and computes a role-fit grade
 3. View the squad on an interactive pitch diagram with per-zone and overall team scores
 
@@ -182,3 +184,5 @@ Built with:
 - [API-football](https://www.api-football.com) — player statistics
 - [Mistral AI](https://mistral.ai) — default LLM provider
 - [Groq](https://groq.com) — alternative LLM provider
+
+Built by [Léonard Baesen-Wagner](https://www.linkedin.com/in/leonard-baesen-wagner/)
