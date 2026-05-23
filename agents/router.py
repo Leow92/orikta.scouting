@@ -9,11 +9,12 @@ import json
 
 from tools.analyze import analyze_player
 from tools.compare import compare_players
+from tools.similar import similar_players
 from prompts.render import render
 from utils.llm_client import llm_route, ACTIVE_ROUTER_MODEL, LLM_PROVIDER
 import utils.pipeline_log as pipeline_log
 
-_ROUTER_SYSTEM = render("router_v0.2.j2")
+_ROUTER_SYSTEM = render("router_v0.3.j2")
 
 # ------------------------------------------------------------------ #
 # LLM routing call                                                     #
@@ -66,12 +67,14 @@ def _default_out_of_scope(language: str) -> str:
         return (
             "Je suis un assistant de **scouting football**. Je peux :\n\n"
             "- **Analyser** un joueur : _Analyser Kylian Mbappé_\n"
-            "- **Comparer** deux joueurs : _Comparer Bellingham et Pedri_"
+            "- **Comparer** deux joueurs : _Comparer Bellingham et Pedri_\n"
+            "- **Trouver des joueurs similaires** : _Qui joue comme Bellingham ?_"
         )
     return (
         "I'm a **football scouting assistant**. I can:\n\n"
         "- **Analyze** a single player: _Analyze Jude Bellingham_\n"
-        "- **Compare** two players: _Compare Mbappe vs Yamal_"
+        "- **Compare** two players: _Compare Mbappe vs Yamal_\n"
+        "- **Find similar players**: _Who plays like Bellingham?_"
     )
 
 
@@ -118,6 +121,13 @@ def route_query(user_query: str, skip_llm: bool = False) -> tuple[str, str]:
             return _no_player_msg(language), language
         pipeline_log.log(f"[router] Dispatching to compare → {players[:2]}")
         return compare_players(players[:2], language=language, skip_llm=skip_llm, user_query=user_query), language
+
+    if tool == "similar":
+        if not players:
+            pipeline_log.log("[router] No player name detected — cannot find similar", level="warning")
+            return _no_player_msg(language), language
+        pipeline_log.log(f"[router] Dispatching to similar → {players[:1]}")
+        return similar_players(players[:1], language=language, skip_llm=skip_llm, user_query=user_query), language
 
     if tool == "blocked":
         pipeline_log.log("[router] Guardrail triggered — query blocked", level="warning")
