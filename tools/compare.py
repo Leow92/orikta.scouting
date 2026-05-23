@@ -248,6 +248,9 @@ def _fetch_player(name: str, language: str = "English") -> dict:
         else:
             pipeline_log.log(f"[compare] No pool data for {league_name} — percentiles unavailable", level="warning")
 
+    minutes    = int((entry.get("games") or {}).get("minutes") or 0)
+    age        = player_info.get("age")
+
     scout_df = build_scout_df(player_obj, pool, position_filter=position_str)
     pipeline_log.log(f"[compare] Scout DataFrame for {full_name}: {len(scout_df)} metrics")
     profile  = build_profile(player_obj)
@@ -268,6 +271,9 @@ def _fetch_player(name: str, language: str = "English") -> dict:
         "trend_block_md":  trend_block_md,
         "position_str":    position_str,
         "photo_url":       photo_url,
+        "minutes":         minutes,
+        "age":             age,
+        "league_name":     league_name,
     }
 
 # -----------------------------
@@ -334,12 +340,27 @@ def compare_players(
 
         # Determine target role (infer from A if not provided)
         if not target_role:
-            bdA = compute_grade(scoutA, role_hint=A.get("position_str"))
+            bdA = compute_grade(scoutA, role_hint=A.get("position_str"),
+                                minutes=A.get("minutes", 0), league=A.get("league_name", ""),
+                                age=A.get("age"))
             target_role = bdA.role
         base = target_role.split(":")[0]
         sub  = target_role.split(":")[1] if ":" in target_role else None
         role_label = label_from_pair(base, sub)
         pipeline_log.log(f"[compare] Target role: {role_label} ({target_role})")
+
+        # Grade both players at the target role
+        pipeline_log.log(f"[compare] Computing grades for both players at role {target_role}…")
+        grade_A = compute_grade(scoutA, role_hint=target_role,
+                                minutes=A.get("minutes", 0), league=A.get("league_name", ""),
+                                age=A.get("age"))
+        grade_B = compute_grade(scoutB, role_hint=target_role,
+                                minutes=B.get("minutes", 0), league=B.get("league_name", ""),
+                                age=B.get("age"))
+        pipeline_log.log(
+            f"[compare] Grades — {A_name}: {grade_A.final_score:.1f}/80 | {B_name}: {grade_B.final_score:.1f}/80",
+            level="success",
+        )
 
         # Duo spider chart
         pipeline_log.log("[compare] Generating duo spider chart…")
@@ -439,6 +460,27 @@ def compare_players(
         style_line = _t("**Best style context**", "**Meilleur style**", language) + f": **{best_style_label}**"
         sim_line   = _t("**Profile similarity**", "**Similarité de profil**", language) + f": {similarity:.1f}/100"
 
+        # Grade comparison block
+        grade_title = _t(
+            f"### 🏅 Role Grade — {role_label} /80",
+            f"### 🏅 Note de poste — {role_label} /80",
+            language,
+        )
+        grade_winner = (
+            A_name if grade_A.final_score > grade_B.final_score
+            else (B_name if grade_B.final_score > grade_A.final_score
+                  else _t("Tie", "Égalité", language))
+        )
+        score_A_str = f"**{grade_A.final_score:.1f}**" if grade_A.final_score >= grade_B.final_score else f"{grade_A.final_score:.1f}"
+        score_B_str = f"**{grade_B.final_score:.1f}**" if grade_B.final_score >= grade_A.final_score else f"{grade_B.final_score:.1f}"
+        grade_md = (
+            f"{grade_title}\n\n"
+            f"| | {A_name} | {B_name} |\n"
+            f"|---|---:|---:|\n"
+            f"| {_t('Score /80', 'Score /80', language)} | {score_A_str} | {score_B_str} |\n"
+            f"| {_t('Edge', 'Avantage', language)} | | **{grade_winner}** |\n"
+        )
+
         header_md = f"""
 {title}
 {SEPARATOR}
@@ -447,6 +489,8 @@ def compare_players(
 
         data_md = f"""
 {comparison_profile_md}
+{SEPARATOR}
+{grade_md}
 {SEPARATOR}
 {role_line}
 {style_line}
