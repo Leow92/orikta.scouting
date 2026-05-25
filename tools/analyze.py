@@ -350,6 +350,7 @@ def analyze_player(
     styles: list[str] | None = None,
     style_strength: float = 0,
     skip_llm: bool = False,
+    include_similar: bool = True,
     user_query: str = "",
 ) -> str:
     """
@@ -417,7 +418,7 @@ def analyze_player(
         pool: list[dict] = []
         if league_id:
             pipeline_log.log(f"[analyze] Fetching league pool: {league_name} (id={league_id}), season {season}…")
-            pool = get_league_players(league_id, season, max_pages=5)
+            pool = get_league_players(league_id, season, max_pages=30 if include_similar else 5)
             if not pool:
                 pipeline_log.log(f"[analyze] No pool data for {league_name} season {season} — percentiles unavailable", level="warning")
                 scout_df = build_scout_df(player_obj, [], position_filter=position_str)
@@ -667,6 +668,19 @@ def analyze_player(
         spider_graph_html = f"<!--PLOTLY_START-->{raw_plotly}<!--PLOTLY_END-->"
         pipeline_log.log("[analyze] Spider chart generated", level="success")
 
+        # ---- 11.5. Similar players (optional) ----
+        similar_md = ""
+        if include_similar:
+            pipeline_log.log(f"[analyze] Computing similar players for {full_name}…")
+            from tools.similar import _similar_players_core
+            similar_md = _similar_players_core(player_obj, pool, scout_df, language=language, show_photo=False)
+            if similar_md and not similar_md.startswith("⚠️"):
+                pipeline_log.log("[analyze] Similar players computed successfully", level="success")
+            elif similar_md:
+                pipeline_log.log(f"[analyze] Similar players warning: {similar_md}", level="warning")
+        else:
+            pipeline_log.log("[analyze] Similar players feature disabled (include_similar=False)", level="info")
+
         # ---- 12. Fast preview (skip LLM) ----
         if skip_llm:
             pipeline_log.log("[analyze] Fast preview mode — skipping LLM narrative", level="success")
@@ -679,6 +693,8 @@ def analyze_player(
 {scout_md}
 {SEPARATOR}
 {multi_md}
+{SEPARATOR}
+{similar_md}
 {SEPARATOR}
 {std2_md}
 """)
@@ -720,6 +736,8 @@ def analyze_player(
 {scout_md}
 {SEPARATOR}
 {multi_md}
+{SEPARATOR}
+{similar_md}
 {SEPARATOR}
 {std2_md}
 """)
